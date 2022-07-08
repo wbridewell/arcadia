@@ -1,0 +1,189 @@
+(ns arcadia.component.response-stm
+  (:require [arcadia.component.core :refer [Component merge-parameters]]
+            [arcadia.utility.descriptors :as d]
+            [arcadia.utility.display :as display]))
+
+;;
+;;
+;; Focus Responsive
+;;
+;;
+;; Default Behavior
+;;
+;;
+;; Produces
+;;
+;;
+
+;; who knows what this should be. eventually we'll want to do a parameter sweep to determine
+;; what makes the most sense. for now, we start out with something that's likely much too low.
+(def ^:parameter threshold "the numerical threshold that responses have to breach to be produced"
+  10)
+
+
+;; to manage inhibition, i need to store semantics and response pairs
+;; {source {response activation}}
+;; if source is the same and response is the same, activation should increase by strength
+;; if source is the different and response is same, activation should increase by strength/threshold
+;; if source is the different and response is different, activation should decrease by strength/(0.5*threshold)
+;; if source is same and response is different, then we have a different response
+
+(defn- element-to-semantic-data [x]
+  {:property (-> x :arguments :property)
+   :value ((-> x :arguments :property) (:arguments x))
+   :source (-> x :arguments :path)
+   :strength (-> x :arguments :strength)})
+
+(defn- update-semantic-strength [[ekey estrength] semantic-data response-type inhibit-conflict? threshold]
+  (println :ekey ekey :estrength estrength)
+  
+  (cond (and (= (:value ekey) (:value semantic-data))
+             (= (:property ekey) (:property semantic-data))
+             (= response-type (:source semantic-data)))
+            ;; growing support for the response
+        {ekey (+ estrength (:strength semantic-data))}
+        ;; NOTES: 
+        ;; no interaction when you get different values from the same source
+        ;; no interaction when you get the same property+value from different sources
+
+        ;; This is the neutral stimulus case
+        (and (not= (:property ekey) (:property semantic-data))
+             (not= (:value ekey) (:value semantic-data))
+             (not= response-type (:source semantic-data)))
+        {ekey (- estrength (/ (* 2.5 (if inhibit-conflict? 0.5 1) (:strength semantic-data)) threshold))}
+
+        ;; The congruent stimulus case. source conflict, but value and property are the same
+        (and (= (:property ekey) (:property semantic-data))
+             (= (:value ekey) (:value semantic-data))
+             (not= response-type (:source semantic-data)))
+        {ekey (- estrength (/ (* 1.25 (if inhibit-conflict? 0.5 1) (:strength semantic-data)) threshold))}
+
+        ;; This is the incongruent stimulus case
+        (and (= (:property ekey) (:property semantic-data))
+             (not= (:value ekey) (:value semantic-data))
+             (not= response-type (:source semantic-data)))
+        {ekey (- estrength (/ (* 5 (if inhibit-conflict? 0.5 1) (:strength semantic-data)) threshold))}
+        ))
+
+;; each semantics element has to visit all the other semantics element, updating the strength of the 
+;; ones that it can excite or inhibit. if the response is completely new, make sure to 
+;; add it to the collection. 
+(defn- update-semantics [curr new response-type inhibit-conflict? threshold]
+  (if (empty? new)
+    curr
+    (let [semantic-data (element-to-semantic-data (first new))]
+      (recur (apply merge curr
+                    (when (not (contains? curr (dissoc semantic-data :source :strength)))
+                      {(dissoc semantic-data :source :strength) (:strength semantic-data)})
+                    (map #(update-semantic-strength [% (get curr %)] semantic-data response-type inhibit-conflict? threshold) (keys curr)))
+             (rest new)
+             response-type
+             inhibit-conflict?
+             threshold))))
+
+(defn- subvocalize
+  "Creates a subvocalization request for word"
+  [response component]
+  {:name "subvocalize"
+   :arguments {:lexeme (:value response)
+               :effector (:effector response)}
+   :world nil
+   :source component
+   :type "action"})
+
+;; response strength will inherit the strength of the semantics
+(defn- semantics-to-response-data [[k v]]
+  {:value  (:value k)
+   :source (:source k)
+   :effector :articulator
+   :strength v})
+
+(defn- update-responses
+  [new]
+   ;; do we just want to add w/o inhibition?
+   ;; they all have the same effector for Stroop, but may want to generalize for other domains
+  (println :update-responses (map #(semantics-to-response-data (vec %)) new))
+  (for [g (vals (group-by :value (map #(semantics-to-response-data (vec %)) new)))
+        :let [strength (reduce + (map #(:strength %) g))]]
+    {(dissoc (first g) :source :strength) strength}))
+
+
+(defn- gather-responses [m component]
+  (map #(subvocalize (first %) component)
+       (filter #(> (second %) (-> component :parameters :threshold))
+               (mapcat vec m))))
+
+;; collect all the "semantics" elements
+;; group them by property
+;; subgroup them by value
+;; associate the subgroups with strengths
+;; after the strength of some subgroup hits a threshold, output the response
+;; and reset to "resting potential"
+
+;; there are questions about how this component would reset because it would
+;; in principle keep storing information and sending responses repeatedly and 
+;; when the next Stroop trial arrives, it would have built up strengths from
+;; the previous trial. 
+;; 
+;; probably intertrial periods should cause this to reset because there are no 
+;; stimulus-related semantics being generated. 
+;;
+;; maybe after n cycles of no input, it will just reset to stand in for response decay.
+
+;; each item in semantics map is
+;; {{:property :value :source} strength}
+;; conflicts occur among values for the same property
+
+;; each item in response map is 
+;; {{:effector :property :value} strength}
+;; conflicts occur among values that use the same effector
+
+(defrecord ResponseSTM [buffer semantic-map response-type inhibit-conflict? parameters]
+  Component
+  (receive-focus
+   [component focus content]
+   (when-let [task-type (d/first-element content :name "update-stroop-response" :type "automation")]
+     (reset! (:response-type component) (-> task-type :arguments :task)))
+
+   (let [s (d/filter-elements content :name "semantics")]
+     ;; set to 1 to get true and see proper SOA results
+;     (reset! (:inhibit-conflict? component) (= (count s) 100))
+
+     ;; this is a mechanism of control. the idea is that when you see one 
+     ;; feature of the stimulus and it's not the right one, this reduces 
+     ;; the effect of its conflict on the other feature. the  
+     (when (and (= (count s) 1)
+                @(:response-type component)
+                (not= (-> s first :arguments :path) @(:response-type component)))
+       (reset! (:inhibit-conflict? component) true))
+
+     (swap! (:semantic-map component) update-semantics s 
+            @(:response-type component) @(:inhibit-conflict? component) (:threshold parameters))
+     (display/element-for :display.status "Semantic Layer"
+                          (map (fn [[k v]] [(:value k) v])
+                               @(:semantic-map component))))
+
+   ;; build a response map from the semantics (unlike semantics, there is no memory at the response level)
+   ;; grab responses that pass threshold
+   (reset! (:buffer component)
+           (gather-responses (update-responses @(:semantic-map component)) component))
+
+   ;; once responses are issued, empty the data structure.
+   (when (seq @(:buffer component))
+     (reset! (:semantic-map component) {}))
+   ;; there's some bleed over during intertrial activity, so reset this because
+   ;; the push button response is supposed to indicate "ready for next trial"
+   (when (d/some-element content :name "push-button" :type "environment-action" :action-command :go-button)
+     (reset! (:inhibit-conflict? component) false)
+     (reset! (:semantic-map component) {})))
+
+  (deliver-result
+    [component]
+    (into #{} @(:buffer component))))
+
+(defmethod print-method ResponseSTM [comp ^java.io.Writer w]
+  (.write w (format "ResponseSTM{}")))
+
+(defn start [& {:as args}]
+  (let [p (merge-parameters args)]
+    (->ResponseSTM (atom nil) (atom nil) (atom nil) (atom false) p)))
