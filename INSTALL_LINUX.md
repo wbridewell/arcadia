@@ -24,7 +24,8 @@ Installing software
 6.  Install the [Tesseract OCR](https://code.google.com/p/tesseract-ocr/) system and the [Tess4J](http://tess4j.sourceforge.net) Java wrapper.  
     1.  Tess4J should be automatically added to your repository by Leiningen when you start your Clojure REPL. Check your project.clj file for the line `[net.sourceforge.tess4j/tess4j "5.2.1"]`.
 7.  To use the gym-minigrid environment, install the Python packages.
-    1. `pip install gym gym-minigrid`
+    1. pip install gym==0.21.0 gym-minigrid==1.0.3
+    2. there was a change to the render API in gym 0.25.0, so earlier versions are currently needed for compatibility
 
 Setting up the git repository
 -----------------------------
