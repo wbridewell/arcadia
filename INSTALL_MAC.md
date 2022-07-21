@@ -28,7 +28,8 @@ Installing software
     2.  Tess4J should be automatically added to your repository by Leiningen when you start your Clojure REPL. Check your project.clj file for the line `[net.sourceforge.tess4j/tess4j "5.2.1"]`.
     1.  Recent versions of Tess4J may have problems on macOS because the native library for tesseract is not included in the jar file. If you find this to be the case, see [Stack Overflow](https://stackoverflow.com/questions/21394537/tess4j-unsatisfied-link-error-on-mac-os-x) for the solution.
 7.  To use the gym-minigrid environment, install the Python packages.
-    1. `pip install gym gym-minigrid`
+    1. `pip install gym==0.21.0 gym-minigrid==1.0.3`
+    2. there was a change to the render API in gym 0.25.0, so earlier versions are currently needed for compatibility
 
 Setting up the git repository
 -----------------------------
