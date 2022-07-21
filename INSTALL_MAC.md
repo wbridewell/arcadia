@@ -27,6 +27,8 @@ Installing software
     1.  On macOS, you can use Homebrew to install Tesseract. On Linux, the software is likely available in your package manager.
     2.  Tess4J should be automatically added to your repository by Leiningen when you start your Clojure REPL. Check your project.clj file for the line `[net.sourceforge.tess4j/tess4j "5.2.1"]`.
     1.  Recent versions of Tess4J may have problems on macOS because the native library for tesseract is not included in the jar file. If you find this to be the case, see [Stack Overflow](https://stackoverflow.com/questions/21394537/tess4j-unsatisfied-link-error-on-mac-os-x) for the solution.
+7.  To use the gym-minigrid environment, install the Python packages.
+    1. `pip install gym gym-minigrid`
 
 Setting up the git repository
 -----------------------------
@@ -100,5 +102,7 @@ The following should be done in your arcadia directory. (**Important**: These in
 12.  `lein deps`
     
 13.  `lein repl`
+    1. To use python libraries, run with `lein with-profile python repl`
+    2. If using native Apple Silicon support, run with `lein with-profile aarch64,python repl`
     
 14.  `(refresh)`

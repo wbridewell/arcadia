@@ -23,6 +23,8 @@ Installing software
     1.  See detailed instructions below which also include details on getting OpenCV.
 6.  Install the [Tesseract OCR](https://code.google.com/p/tesseract-ocr/) system and the [Tess4J](http://tess4j.sourceforge.net) Java wrapper.  
     1.  Tess4J should be automatically added to your repository by Leiningen when you start your Clojure REPL. Check your project.clj file for the line `[net.sourceforge.tess4j/tess4j "5.2.1"]`.
+7.  To use the gym-minigrid environment, install the Python packages.
+    1. `pip install gym gym-minigrid`
 
 Setting up the git repository
 -----------------------------
@@ -81,5 +83,6 @@ The following should be done in your arcadia directory. (**Important**: These in
 11.  `lein deps`
     
 12.  `lein repl`
+    1. To use python libraries, run with `lein with-profile python repl`
     
 13.  `(refresh)`
