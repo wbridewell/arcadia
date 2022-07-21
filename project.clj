@@ -37,10 +37,12 @@
   :repositories {"project" {:url "file:repo" :update :always}
                  "jcenter" {:id "central" :url "https://jcenter.bintray.com"}}
   :profiles {:python {:dependencies [[clj-python/libpython-clj "2.018"]
-                                     [nrepl/nrepl "0.9.0"]]
+                                     [nrepl/nrepl "0.9.0"]
+                                     [org.nrepl/incomplete "0.1.0"]]
                       :jvm-opts ["--add-modules" "jdk.incubator.foreign"
                                  "--enable-native-access=ALL-UNNAMED"]}
-             :aarch64 {:dependencies [[nrepl/nrepl "0.9.0"]]
+             :aarch64 {:dependencies [[nrepl/nrepl "0.9.0"]
+                                      [org.nrepl/incomplete "0.1.0"]]
                        :jvm-opts ["-Djava.library.path=/opt/homebrew/lib:/opt/homebrew/opt/opencv/share/java/opencv4"
                                   "-Djna.library.path=/opt/homebrew/lib" 
                                   "-Dapple.awt.UIElement=true"]}})
