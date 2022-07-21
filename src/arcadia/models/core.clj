@@ -5,7 +5,7 @@
   #_{:clj-kondo/ignore [:unused-namespace]}
   (:require [arcadia.utility.model :as model])
   (:require
-   (arcadia.sensor action-sensor minigrid-sensor stable-viewpoint text-sensor touch)
+   (arcadia.sensor action-sensor minigrid-sensor stable-viewpoint text-sensor)
    (arcadia.component.highlighter basic-shape center color crowding gaze-target maintenance
                                   proximity saliency vstm)
    (arcadia.component.minigrid action-detector actor egocentric-map enter-room-detector episode-binder highlighter
@@ -73,7 +73,6 @@
     sweep-updater
     task-hierarchy
     task-ltm
-    touch-detector
     trial-responder
     trial-starter
     two-button-display

@@ -22,27 +22,13 @@ Installing software
 5.  Retrieve the base ARCADIA workspace from the project's Git repository.
     1.  See detailed instructions below which also include details on getting OpenCV.
 6.  Install the [Tesseract OCR](https://code.google.com/p/tesseract-ocr/) system and the [Tess4J](http://tess4j.sourceforge.net) Java wrapper.  
-    1.  Tess4J should be automatically added to your repository by Leiningen when you start your Clojure REPL. Check your project.clj file for the line `[net.sourceforge.tess4j/tess4j "4.4.1"]`.
-7.  Install [jbox2d](https://github.com/jbox2d/jbox2d) for your platform.
+    1.  Tess4J should be automatically added to your repository by Leiningen when you start your Clojure REPL. Check your project.clj file for the line `[net.sourceforge.tess4j/tess4j "5.2.1"]`.
 
 Setting up the git repository
 -----------------------------
 
 1.  Change to the directory that will contain your Clojure projects (ensure that the pathname does not include any spaces).
-2.  `lein new arcadia --force`
-    
-3.  `cd arcadia`
-    
-4.  Setup the git repository. This is a little different because we're using an existing directory.
-    1.  `git init`
-        
-    2.  `git remote add origin [https://your.name@bitbucket.di2e.net/scm/arcadia/arcadia.git](https://your.name@bitbucket.di2e.net/scm/arcadia/arcadia.git)`
-        
-    3.  `git fetch`
-        
-    4.  `rm [README.md](http://README.md) project.clj src/arcadia/core.clj LICENSE .gitignore`
-        
-    5.  `git checkout -t origin/master`
+2.  git clone https://github.com/wbridewell/arcadia.git
         
 
 Setting up OpenCV / Updating OpenCV
@@ -96,28 +82,4 @@ The following should be done in your arcadia directory. (**Important**: These in
     
 12.  `lein repl`
     
-13.  `(load "arcadia/core")`
-    
-
-Setting up jbox2d
------------------
-
-The current version of arcadia requires that you also have jbox2d installed.
-
-1.  Download [jbox2d](https://github.com/jbox2d/jbox2d)
-    
-    1.  `git clone [https://github.com/jbox2d/jbox2d.git](https://github.com/jbox2d/jbox2d.git)`
-2.  Navigate to wherever you placed jbox2d and into the jbox2d-library
-3.  Fix the file pom.xml at this location
-    1.  Add `<source>1.8</source>`, followed by `<target>1.8></target>` just above "`<excludes>`..."
-4.  In a terminal, navigate to jbox2d-library and run 
-    
-    1.  `mvn install`
-        
-5.  Copy the file found in `jbox2d-library/target` to your arcadia directory.
-    
-6.  Navigate to your arcadia directory in a terminal.
-    
-7.  `mv jbox2d-library-2.3.1-SNAPSHOT.jar jbox2d.jar`
-    
-8.  `mvn deploy:deploy-file -DgroupId=local -DartifactId=jbox2d -Dversion=2.3.1 -Dpackaging=jar -Dfile=jbox2d.jar -Durl=file:repo`
+13.  `(refresh)`

@@ -1,0 +1,14 @@
+{:linters {:unused-binding {:level :off}
+           :unresolved-symbol {:exclude [(arcadia.utility.display/i# [%])
+                                         (arcadia.utility.data/o# [%])]}
+           :unresolved-namespace {:exclude [py cuda cv2 np dtype cuda-farneback 
+                                            cuda-optflow builtins dtt]}
+           :clojure-lsp/unused-public-var {:level :off}
+           }
+
+ :lint-as {arcadia.utility.general/when-let* clojure.core/let
+ 		   arcadia.utility.opencv/defmethod-py clojure.core/defmethod
+ 		   arcadia.utility.opencv/defmethod-cuda clojure.core/defmethod
+           arcadia.utility.opencv/defn-py clojure.core/defn
+           arcadia.utility.opencv/defn-py- clojure.core/defn-
+ 		   arcadia.utility.opencv/wp clojure.core/do}}

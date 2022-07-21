@@ -17,7 +17,6 @@
                  [manifold "0.1.8"]
                  [local/opencv "arcadia"]
                  [local/opencv-native "arcadia"]
-                 [local/jbox2d "2.3.1"]
                  [w33t/kawa "0.1.2"]
                  [org.clojure/math.numeric-tower "0.0.5"]
                  [org.clojure/math.combinatorics "0.1.6"]
