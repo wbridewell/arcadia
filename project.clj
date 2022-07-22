@@ -40,7 +40,8 @@
                                      [nrepl/nrepl "0.9.0"]
                                      [org.nrepl/incomplete "0.1.0"]]
                       :jvm-opts ["--add-modules" "jdk.incubator.foreign"
-                                 "--enable-native-access=ALL-UNNAMED"]}
+                                 "--enable-native-access=ALL-UNNAMED"
+                                 "-Dsun.java2d.xrender=false"]}
              :aarch64 {:dependencies [[nrepl/nrepl "0.9.0"]
                                       [org.nrepl/incomplete "0.1.0"]]
                        :jvm-opts ["-Djava.library.path=/usr/lib/jni:/opt/homebrew/lib:/opt/homebrew/opt/opencv/share/java/opencv4"
