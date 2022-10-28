@@ -53,8 +53,8 @@
       (or @(:render-buffer env)
           (reset! (:render-buffer env) 
                   {:image (cv/->java (cv/cvt-color (wmg (py. minigrid-env "render" "nothuman")) cv/COLOR_RGB2BGR))
-                   :full-map (cv/->java (wmg #_{:clj-kondo/ignore [:unresolved-symbol]}
-                                         (py. (py.- minigrid-env "grid") "encode")))
+                   :full-map (cv/transpose! (cv/->java (wmg #_{:clj-kondo/ignore [:unresolved-symbol]}
+                                                        (py. (py.- minigrid-env "grid") "encode"))))
                    :agent-obs (wmg (let [x (py. minigrid-env "gen_obs")]
                                      {:direction (py/->jvm (:direction x))
                                       :mission (py/->jvm (:mission x))
