@@ -31,24 +31,23 @@
 ;; into a more abstract event description. development of that ability
 ;; will require further research into episodic memory.
 
-(defn record-new-object [element source]
+(defn record-new-object [element]
   {:name "memorize"
    :arguments {:element element}
    :type "action"
-   :world nil
-   :source source})
+   :world nil})
 
 (defrecord NewObjectRecorder [buffer]
   Component
   (receive-focus
-   [component focus content]
-   (if (d/element-matches? focus :name "visual-new-object" :type "event" :world nil?)
-     (reset! (:buffer component) (record-new-object focus component))
-     (reset! (:buffer component) nil)))
+    [component focus content]
+    (if (d/element-matches? focus :name "visual-new-object" :type "event" :world nil?)
+      (reset! (:buffer component) (record-new-object focus))
+      (reset! (:buffer component) nil)))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method NewObjectRecorder [comp ^java.io.Writer w]
   (.write w (format "NewObjectRecorder{}")))

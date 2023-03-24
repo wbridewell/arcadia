@@ -25,25 +25,24 @@
   (:require [arcadia.utility.descriptors :as d]
             [arcadia.component.core :refer [Component]]))
 
-(defn- make-env-action [e source]
+(defn- make-env-action [e]
   (when e
     {:name "minigrid-env-action"
      :arguments {:action-command (-> e :arguments :action-command)}
      :world nil
-     :source source
      :type "environment-action"}))
 
 (defrecord MinigridActor [buffer]
   Component
   (receive-focus
-   [component focus content]
-   (if (d/element-matches? focus :name "minigrid-action" :type "action" :world nil)
-     (reset! (:buffer component) (make-env-action focus component))
-     (reset! (:buffer component) nil)))
+    [component focus content]
+    (if (d/element-matches? focus :name "minigrid-action" :type "action" :world nil)
+      (reset! (:buffer component) (make-env-action focus))
+      (reset! (:buffer component) nil)))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method MinigridActor [comp ^java.io.Writer w]
   (.write w (format "MinigridActor{}")))

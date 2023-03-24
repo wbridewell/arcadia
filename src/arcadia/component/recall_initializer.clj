@@ -17,35 +17,35 @@
 
 (def ^:parameter ^:required cue-symbol "cue to match (required)" nil)
 
-(defn- cue-recall [source id]
+(defn- cue-recall [id]
   {:name "wm-recall"
    :arguments {:id id}
    :world nil
-   :source source
    :type "action"})
 
 ;; buffer: nil, or the recall command if present
 ;; cue-symbol: if this symbol is present, fire off recall from WM
-(defrecord RecallInitializer [buffer cue-symbol] Component
+(defrecord RecallInitializer [buffer cue-symbol]
+  Component
   (receive-focus
-   [component focus content]
-   (reset! (:buffer component) nil)
+    [component focus content]
+    (reset! (:buffer component) nil)
 
-   (when (and (= (:type focus) "instance")
-              (= (:name focus) "object-property")
-              (= (:world focus) nil)
-              (= (-> focus :arguments :property) :character)
-              (= (-> focus :arguments :value) cue-symbol))
-     (when-let [id (->> content
-                        (g/find-first #(and (= (:world %) "working-memory")
-                                            (-> % meta :id)
-                                            (-> % meta :prev nil?)))
-                        meta :id)]
-       (reset! (:buffer component) (cue-recall component id)))))
+    (when (and (= (:type focus) "instance")
+               (= (:name focus) "object-property")
+               (= (:world focus) nil)
+               (= (-> focus :arguments :property) :character)
+               (= (-> focus :arguments :value) cue-symbol))
+      (when-let [id (->> content
+                         (g/find-first #(and (= (:world %) "working-memory")
+                                             (-> % meta :id)
+                                             (-> % meta :prev nil?)))
+                         meta :id)]
+        (reset! (:buffer component) (cue-recall id)))))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method RecallInitializer [comp ^java.io.Writer w]
   (.write w (format "RecallInitializer{}")))

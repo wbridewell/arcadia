@@ -9,26 +9,26 @@
 (def ^:private relation-descriptor
   (d/descriptor :name "relation" :type "instance" :world nil :context "real"))
 
-(defn relation-event [relation component]
+(defn relation-event [relation]
   {:name "event"
    :arguments {:event-name (-> relation :arguments :predicate-name)
                ;:event-lifespan nil
                :objects (-> relation :arguments :arguments)
                :relation relation}
    :type "instance"
-   :source component
    :world nil})
 
-(defrecord RelationDetector [buffer] Component
+(defrecord RelationDetector [buffer]
+  Component
   (receive-focus
-   [component focus content]
-   (->> content
-        (d/filter-matches relation-descriptor)
-        (map #(relation-event % component))
-        (reset! (:buffer component))))
+    [component focus content]
+    (->> content
+         (d/filter-matches relation-descriptor)
+         (map #(relation-event %))
+         (reset! (:buffer component))))
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method RelationDetector [comp ^java.io.Writer w]
   (.write w (format "RelationDetector{}")))

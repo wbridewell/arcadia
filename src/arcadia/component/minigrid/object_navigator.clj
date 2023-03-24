@@ -4,19 +4,17 @@
             [arcadia.utility.descriptors :as d]
             [arcadia.utility.minigrid :as mg]))
 
-(defn- make-navpoint [obj source]
+(defn- make-navpoint [obj]
   (when obj
     {:name "minigrid-navigation"
      :arguments {:goal obj}
-     :world nil
-     :source source
+     :world nil 
      :type "action"}))
 
-(defn- report-goal [goal component]
+(defn- report-goal [goal]
   {:name "goal-reached"
    :arguments {:goal goal}
-   :world nil
-   :source component
+   :world nil 
    :type "instance"})
 
 (defn- navpoint-reached? [obj pos]
@@ -32,21 +30,21 @@
 (defrecord MinigridObjectNavigator [buffer]
   Component
   (receive-focus
-   [component focus content]
-   (reset! (:buffer component) nil)
-   (let [prev-nav (d/first-element content :type "action" :name "minigrid-navigation")
-         egocentric (d/first-element content :name "spatial-map" :perspective "egocentric")]
-     (if (and prev-nav egocentric)
-       (if (navpoint-reached? (-> prev-nav :arguments :goal) (-> egocentric :arguments :location))
-         (reset! (:buffer component) (report-goal (-> prev-nav :arguments :goal) component))
-         (reset! (:buffer component) prev-nav))
-       (when (and (d/element-matches? focus :type "instance" :name "object" :category #(not (#{"key"} %)) :world nil)
-                  (not (need-key? focus (mg/inventory content))))
-         (reset! (:buffer component) (make-navpoint focus component))))))
+    [component focus content]
+    (reset! (:buffer component) nil)
+    (let [prev-nav (d/first-element content :type "action" :name "minigrid-navigation")
+          egocentric (d/first-element content :name "spatial-map" :perspective "egocentric")]
+      (if (and prev-nav egocentric)
+        (if (navpoint-reached? (-> prev-nav :arguments :goal) (-> egocentric :arguments :location))
+          (reset! (:buffer component) (report-goal (-> prev-nav :arguments :goal)))
+          (reset! (:buffer component) prev-nav))
+        (when (and (d/element-matches? focus :type "instance" :name "object" :category #(not (#{"key"} %)) :world nil)
+                   (not (need-key? focus (mg/inventory content))))
+          (reset! (:buffer component) (make-navpoint focus))))))
 
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method MinigridObjectNavigator [comp ^java.io.Writer w]
   (.write w (format "MinigridObjectNavigator{}")))

@@ -1,4 +1,4 @@
-(defproject arcadia "0.3.0"
+(defproject arcadia "0.4.0"
   :description "A framework for building attention-centric cognitive systems."
   :url "https://www.nrl.navy.mil"
   :license {:name "see LICENSE file"}
@@ -27,24 +27,25 @@
                  [net.mikera/core.matrix "0.62.0"]
                  [net.mikera/vectorz-clj "0.48.0"]
                  [codox-theme-rdash "0.1.2"]
-                 [cnuernber/dtype-next "9.028" :exclusions [ch.qos.logback/logback-classic org.clojure/tools.logging]]] 
+                 [cnuernber/dtype-next "10.000-beta-35" :exclusions [ch.qos.logback/logback-classic org.clojure/tools.logging]]
+                 ] 
   :codox {:project {:name "ARCADIA"
                     :themes [:rdash]
                     :source-paths ["src"]}}
 
   :injections [(clojure.lang.RT/loadLibrary org.opencv.core.Core/NATIVE_LIBRARY_NAME)
-               (require '[clojure.tools.namespace.repl :refer [refresh refresh-all]])]
+               (require '[clojure.tools.namespace.repl :refer [refresh refresh-all]])
+               (refresh)
+               (require '[arcadia.utility.display :refer [clear]])]
   :repositories {"project" {:url "file:repo" :update :always}
                  "jcenter" {:id "central" :url "https://jcenter.bintray.com"}}
-  :profiles {:python {:dependencies [[clj-python/libpython-clj "2.018"]
-                                     [nrepl/nrepl "0.9.0"]
+  :profiles {:python {:dependencies [[clj-python/libpython-clj "2.024"]
+                                     [nrepl "1.0.0"]
                                      [org.nrepl/incomplete "0.1.0"]]
-                      :jvm-opts ["--add-modules" "jdk.incubator.foreign"
-                                 "--enable-native-access=ALL-UNNAMED"]}
-             :aarch64 {:dependencies [[nrepl/nrepl "0.9.0"]
+                      :jvm-opts ["--enable-native-access=ALL-UNNAMED"]}
+             :aarch64 {:dependencies [[nrepl "1.0.0"]
                                       [org.nrepl/incomplete "0.1.0"]]
-                       :jvm-opts ["-Djava.library.path=/usr/lib/jni:/opt/homebrew/lib:/opt/homebrew/opt/opencv/share/java/opencv4"
+                       :jvm-opts ["-Djava.library.path=/opt/homebrew/lib:/opt/homebrew/opt/opencv/share/java/opencv4"
                                   "-Djna.library.path=/opt/homebrew/lib"
-                                  "-Dsun.java2d.xrender=false"
                                   "-Dapple.awt.UIElement=true"]}})
                                      

@@ -43,7 +43,6 @@
                :max-point @(:max-point component)
                :sensor (:sensor component)}
    :world nil
-   :source component
    :type "instance"})
 
 ;; Operates solely over sensor input, hence "bottom-up".
@@ -72,7 +71,7 @@
   (deliver-result
    [component]
    (when @(:buffer component)
-     #{(make-maps component)})))
+     (list (make-maps component)))))
 
 (defmethod print-method BottomUpSaliency [comp ^java.io.Writer w]
   (.write w (format "BottomUpSaliency{}")))

@@ -12,7 +12,7 @@
 
 (def ^:parameter ^:required sensor "a sensor that provides minigrid input (required)" nil)
 
-(defn- interlingua [obs component]
+(defn- interlingua [obs]
   {:name "spatial-map"
    :arguments {:layout (:image obs)
                :location (:location obs)
@@ -20,7 +20,6 @@
                :place "minigrid"
                :perspective "egocentric"}
    :world nil
-   :source component
    :type "instance"})
 
 (defrecord MinigridEgocentricMap [sensor buffer]
@@ -28,10 +27,10 @@
   (receive-focus
     [component focus content]
     (when-let [data (sensor/poll (:sensor component))]
-      (reset! (:buffer component) (interlingua (:agent-obs data) component))))
+      (reset! (:buffer component) (interlingua (:agent-obs data)))))
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method MinigridEgocentricMap [comp ^java.io.Writer w]
   (.write w (format "MinigridEgocentricMap{}")))

@@ -2,8 +2,9 @@
   (:require [arcadia.architecture.registry :refer [get-sensor]]
             [arcadia.utility.display :refer [i#]]
             [clojure.java.io]
+            [clojure.data.generators :as dgen]
             [arcadia.models.core]
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             (arcadia.utility [model :as model]
                              [objects :as obj])))
 
@@ -15,7 +16,7 @@
 ;; the fixation point or the critical stimulus and is task specific.
 (defn- right-size? [vno]
   (>
-    (reg/area (-> vno
+    (geo/area (-> vno
                 :arguments
                 :object
                 :arguments
@@ -27,7 +28,7 @@
 (defn- inhibits? [inhibitor candidate locations]
   (let [region (obj/get-region candidate locations)
         contained? (and region
-                       (reg/intersect? region (-> inhibitor :arguments :region)))]
+                       (geo/intersect? region (-> inhibitor :arguments :region)))]
     (if (= (-> inhibitor :arguments :mode) "include")
       contained?
       (not contained?))))
@@ -35,7 +36,7 @@
 ;; notice that if everything is inhibited, you still look somewhere.
 (defn- pick-candidate [candidates inhibitions locations]
   (if (empty? inhibitions)
-    (when (seq candidates) (rand-nth candidates))
+    (when (seq candidates) (dgen/rand-nth candidates))
     (let [uninhibited (filter (fn [c]
                                 (if (seq inhibitions)
                                   (not-any? #(inhibits? % c locations) inhibitions)
@@ -48,7 +49,7 @@
 
         ;; this commented out line picks a random element and is hyper unrealistic.
         (when (seq uninhibited)
-          (rand-nth uninhibited))))))
+          (dgen/rand-nth uninhibited))))))
 
 (defn select-focus [expected]
   (let [new-objects (filter #(and (= (:name %) "object")
@@ -64,27 +65,27 @@
           (some #(= (:name %) "visual-new-object") expected)
           (right-size? (first (filter #(= (:name %) "visual-new-object") expected))))
 
-     (rand-nth (filter #(and (= (:name %) "comparison") (= (:world %) nil)) expected))
+     (dgen/rand-nth (filter #(and (= (:name %) "comparison") (= (:world %) nil)) expected))
 
 
      (some #(= (:type %) "action") expected)
-     (rand-nth (filter #(= (:type %) "action") expected))
+     (dgen/rand-nth (filter #(= (:type %) "action") expected))
 
      (seq new-objects)
-     (rand-nth new-objects)
+     (dgen/rand-nth new-objects)
 
      (some #(and (= (:name %) "fixation") (nil? (:world %))) expected)
      (let [candidates (filter #(and (= (:name %) "fixation") (nil? (:world %))) expected)
            inhibitions (filter #(and (= (:name %) "fixation-inhibition") (nil? (:world %))) expected)
            selection (pick-candidate candidates inhibitions locations)]
        (if (nil? selection)
-         (rand-nth (remove #(and (= (:name %) "fixation") (nil? (:world %))) expected))
+         (dgen/rand-nth (remove #(and (= (:name %) "fixation") (nil? (:world %))) expected))
          (do
            (println "FIXATION REGION:" (-> selection :arguments :segment :region))
            selection)))
 
      (seq expected)
-     (rand-nth (seq expected)))))
+     (dgen/rand-nth (seq expected)))))
 
 #_{:clj-kondo/ignore [:unresolved-symbol]}
 (defn sensor-setup []

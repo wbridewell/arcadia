@@ -13,7 +13,9 @@
            '[libpython-clj2.python :refer [py. py.. py.-] :as py])
   ((resolve 'require-python) '[pyttsx3 :as pytts])
   ;(require-python 'pyttsx3)
-  (def ^:private python-tts? true)
+  ;(def ^:private python-tts? true)
+  ;; temporarily disabled TTS
+  (def ^:private python-tts? false)
   (catch Exception e nil))
 
 (defmacro wp

@@ -26,25 +26,24 @@
 
 (def ^:parameter ^:required tasks "sequence of task definitions (required)" nil)
 
-(defn- task-schema [name task source]
+(defn- task-schema [name task]
   {:name "task-schema"
    :arguments {:task-name name :task task}
    :type "instance"
-   :world nil
-   :source source})
+   :world nil})
 
 (defrecord TaskLTM [buffer tasks]
   Component
   (receive-focus
-   [component focus content]
-   (if (d/element-matches? focus :name "memory-retrieval" :type "action" :world nil)
-     (reset! (:buffer component) (map #(task-schema % (get (:tasks component) %) component)
-                                      (-> focus :arguments :lexemes)))
-     (reset! (:buffer component) nil)))
+    [component focus content]
+    (if (d/element-matches? focus :name "memory-retrieval" :type "action" :world nil)
+      (reset! (:buffer component) (map #(task-schema % (get (:tasks component) %))
+                                       (-> focus :arguments :lexemes)))
+      (reset! (:buffer component) nil)))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method TaskLTM [comp ^java.io.Writer w]
   (.write w (format "TaskLTM{%s}" (str (count (:tasks comp)) " tasks"))))

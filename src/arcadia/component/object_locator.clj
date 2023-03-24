@@ -44,15 +44,15 @@
    * object-location
    * object-location-map"
   (:require [arcadia.component.core :refer [Component merge-parameters]]
-            (arcadia.utility [objects :as obj]
-                             [object-location-map :as olm]
-                             [gaze :as gaze] [general :as g]
-                             [descriptors :as d])
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.descriptors :as d]
+            [arcadia.utility.gaze :as gaze]
+            [arcadia.utility.general :as g]
+            [arcadia.utility.geometry :as geo]
+            [arcadia.utility.objects :as obj]
+            [arcadia.utility.object-location-map :as olm]
             [arcadia.sensor.stable-viewpoint :as sensor]
             [clojure.core.matrix]
-            [clojure.set :refer [difference]])
-  (:import java.util.Random))
+            [clojure.set :refer [difference]]))
 
 (def ^:private old-mexhats
   "Cache of mexican hats that can be optionally used instead of remaking them from scratch."
@@ -89,13 +89,13 @@
 (def ^:parameter pos-bias-strength-multi "relative strength of the bias" 2.5)
 
 (def ^:parameter center-fn "function used to get a segment's center"
-  #(-> % :region reg/center))
+  #(-> % :region geo/center))
 
 (def ^:parameter radius-fn "function used to get a segment's radius"
-  #(-> % :region reg/radius))
+  #(-> % :region geo/radius))
 
 (def ^:parameter sq-distance-fn "function used to compute the sq-distance between points"
-  reg/sq-distance)
+  geo/sq-distance)
 
 (def ^:parameter max-distance "If mex-hats are not used, this is the maximum distance
  allowed between a region on one cycle and a region on the following cycle, measuring
@@ -133,8 +133,8 @@
    a :bias, take the average of the center and the bias."
   [{region :region bias :bias :as location} segment center-fn sq-distance-fn]
   (let [center (if bias
-                 (point-avg (reg/center region) (reg/center bias))
-                 (reg/center region))]
+                 (point-avg (geo/center region) (geo/center bias))
+                 (geo/center region))]
     (some-> segment center-fn (sq-distance-fn center))))
 
 (defn- get-nearest-segment
@@ -143,8 +143,8 @@
   [{region :region bias :bias :as location}
    segments center-fn sq-distance-fn max-distance max-normed-distance]
   (let [center (if bias
-                 (point-avg (reg/center region) (reg/center bias))
-                 (reg/center region))
+                 (point-avg (geo/center region) (geo/center bias))
+                 (geo/center region))
         [segment sq-dist]
         (first (sort-by second <
                         (map #(vector % (sq-distance-fn center (center-fn %)))
@@ -153,7 +153,7 @@
                (or (nil? max-distance)
                    (< (Math/sqrt sq-dist) max-distance))
                (or (nil? max-normed-distance)
-                   (< (/ (Math/sqrt sq-dist) (reg/radius region)) max-normed-distance)))
+                   (< (/ (Math/sqrt sq-dist) (geo/radius region)) max-normed-distance)))
       segment)))
 
 (defn- remove-redundant-regions
@@ -234,12 +234,12 @@
   might be two mexhats if the region includes an extrapolated location."
   [region gaze-center big? mexhats params]
   (if (seq? region)
-    [(reg/center (first region))
+    [(geo/center (first region))
      (olm/get-neg-mexhat-for-region
-      region mexhats big? (reg/distance (reg/center (first region)) gaze-center) params)]
-    [(reg/center region)
+      region mexhats big? (geo/distance (geo/center (first region)) gaze-center) params)]
+    [(geo/center region)
      (olm/get-neg-mexhat-for-region region mexhats big?
-                                    (reg/distance (reg/center region) gaze-center) params)]))
+                                    (geo/distance (geo/center region) gaze-center) params)]))
 
 (defn- region->enhanced-region
   "Returns the bounding box for the enhancement associated with a region, given the object location map. Also
@@ -258,8 +258,8 @@
   untracked region."
   [dims mat tracked-regions untracked-regions mexhats gaze params]
   (let [gaze-center (if gaze
-                      (vector (:pixel-x (:arguments gaze)) (:pixel-y (:arguments gaze)))
-                      (vector (/ (first dims) 2) (/ (second dims) 2)))
+                      {:x (:pixel-x (:arguments gaze)) :y (:pixel-y (:arguments gaze))}
+                      {:x (/ (first dims) 2) :y (/ (second dims) 2)})
         filtered-tracked-regions (remove-redundant-regions tracked-regions)
 
         ;;Default behavior is to take off a fixed cost for the
@@ -267,16 +267,16 @@
         base (* (- (:target-cost params)) (count filtered-tracked-regions))
 
         [tracked_centers tracked_hats] (reduce (fn ([a b] (mapv conj a b))) (vector nil nil)
-                                        (map #(region->center-and-neg-mexhat % gaze-center true mexhats params)
-                                             filtered-tracked-regions))
+                                               (map #(region->center-and-neg-mexhat % gaze-center true mexhats params)
+                                                    filtered-tracked-regions))
 
         [untracked_centers untracked_hats] (reduce (fn ([a b] (mapv conj a b))) (vector nil nil)
-                                            (map #(region->center-and-neg-mexhat % gaze-center false mexhats params)
-                                                 untracked-regions))]
+                                                   (map #(region->center-and-neg-mexhat % gaze-center false mexhats params)
+                                                        untracked-regions))]
 
     (olm/make-object-location-map
-      (olm/make-object-location-map mat tracked_centers tracked_hats nil base true)
-      untracked_centers untracked_hats nil nil true)))
+     (olm/make-object-location-map mat tracked_centers tracked_hats nil base true)
+     untracked_centers untracked_hats nil nil true)))
 
 (defn- location->bias
   "If there is a bias (from extrapolation) associated with this location, return
@@ -285,18 +285,18 @@
   [location mexhats params]
   (if (nil? (:bias location))
     [nil nil]
-    [(-> location :bias reg/center)
+    [(-> location :bias geo/center)
      (olm/get-bias-for-region (list (:region location) (:bias location)) mexhats params)]))
 
 (defn- add-eregions-to-object-location-map
   "Adds the enhanced regions, along with any biases found among the regions, to an object location map."
   [eregions locations mat mexhats params]
-  (let [[bias_centers bias_hats] (reduce (fn[x y] (mapv conj x y)) ['() '()]
+  (let [[bias_centers bias_hats] (reduce (fn [x y] (mapv conj x y)) ['() '()]
                                          (map #(location->bias % mexhats params) locations))
         updated-mat
-        (olm/make-object-location-map mat (map #(-> % :region reg/center) eregions)
-                                  (map :hat eregions)
-                                  (map :mask eregions) nil false)]
+        (olm/make-object-location-map mat (map #(-> % :region geo/center) eregions)
+                                      (map :hat eregions)
+                                      (map :mask eregions) nil false)]
 
     (olm/make-object-location-map updated-mat (remove nil? bias_centers) (remove nil? bias_hats) nil nil true)))
 
@@ -328,20 +328,20 @@
 (defn- estimate-segment-score
   "Computes a score for the pairing between a segment and an enhanced region (eregion).
   location is the old location the enhanced region is based on."
-  [segment location eregion randomizer sensor params]
-  (if (not (reg/intersect? (:region segment) eregion))
+  [segment location eregion sensor params]
+  (if (not (geo/intersect? (:region segment) eregion))
     [0 0]
     (let [segment-center ((:center-fn params) segment)
           segment-radius ((:radius-fn params) segment)
-          distance (reg/distance segment-center (reg/center eregion))
-          max-distance (+ segment-radius (reg/radius eregion))
+          distance (geo/distance segment-center (geo/center eregion))
+          max-distance (+ segment-radius (geo/radius eregion))
           score (gaze/pixels->degrees (* 1.0 (- max-distance distance)) sensor)
 
-          cutoff (+ (:noise-center params) (* (.nextGaussian randomizer) (:noise-width params)))
+          cutoff (+ (:noise-center params) (* (g/next-gaussian) (:noise-width params)))
           bias-distance (and (:bias location)
-                             (reg/distance segment-center (-> location :bias reg/center)))
+                             (geo/distance segment-center (-> location :bias geo/center)))
           max-bias-distance (and (:bias location)
-                                 (+ segment-radius (-> location :bias reg/radius)))]
+                                 (+ segment-radius (-> location :bias geo/radius)))]
       (cond
         (and bias-distance (< bias-distance max-bias-distance))
         [(* 1.0 (- max-bias-distance bias-distance)) 2]
@@ -386,8 +386,8 @@
 
        :else
        (assign-segments-to-regions
-         (rest scores) (assoc results slot segment) (conj used-slots slot)
-         (conj used-segs segment) reuse-segs?)))))
+        (rest scores) (assoc results slot segment) (conj used-slots slot)
+        (conj used-segs segment) reuse-segs?)))))
 
 
 
@@ -396,7 +396,7 @@
   locations from the previous cycle. olmap is a matrix on which suppressed regions have
   been drawn. Each location is converted to an enhanced region, every enhanced region/
   segment pairing is scored, and segments are greedily matched to enhanced regions."
-  [segments slot->location olmap mexhats randomizer sensor params]
+  [segments slot->location olmap mexhats sensor params]
   (let [slots (keys slot->location)
         eregions (map #(region->enhanced-region (-> % slot->location :region)
                                                 mexhats olmap params)
@@ -407,7 +407,7 @@
                 [slot seg])
         scores
         (doall (map #(vector % (estimate-segment-score (second %) (slot->location (first %))
-                                                       (get eregion-map (first %)) randomizer sensor params))
+                                                       (get eregion-map (first %)) sensor params))
                     pairs))]
     [(assign-segments-to-regions (map first (sort-by second score> (filter #(score-positive? (second %)) scores))))
      (add-eregions-to-object-location-map eregions (map slot->location slots) olmap mexhats params)]))
@@ -434,15 +434,15 @@
                              (get-distance-to-segment
                               (slot->location slot) seg center-fn sq-distance-fn)))
                    pairs))
-       max-sq-dist (remove (fn [[pair sq-dist]] (> sq-dist max-sq-dist)))
-       max-normed-distance (remove (fn [[[slot _] sq-dist]]
-                                     (-> slot slot->location :region reg/radius
-                                         (->> (/ (Math/sqrt sq-dist)))
-                                         (> max-normed-distance))))
-       true (sort-by second <)
-       true (map first)
-       true assign-segments-to-regions
-       true (into {})))
+        max-sq-dist (remove (fn [[pair sq-dist]] (> sq-dist max-sq-dist)))
+        max-normed-distance (remove (fn [[[slot _] sq-dist]]
+                                      (-> slot slot->location :region geo/radius
+                                          (->> (/ (Math/sqrt sq-dist)))
+                                          (> max-normed-distance))))
+        true (sort-by second <)
+        true (map first)
+        true assign-segments-to-regions
+        true (into {})))
     {}))
 
 (defn- assign-segments
@@ -456,8 +456,8 @@
           max-distance (:max-distance params)
           max-normed-distance (:max-normed-distance params)]
       (g/update-all slot->location
-                  #(get-nearest-segment % segments center-fn sq-distance-fn
-                                        max-distance max-normed-distance)))
+                    #(get-nearest-segment % segments center-fn sq-distance-fn
+                                          max-distance max-normed-distance)))
     {}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -465,7 +465,7 @@
 ;; Functions for creating interlingua elements, and top-level code.
 
 (defn- locate-object
-  [slot segment source params]
+  [slot segment params]
   (when (and slot segment)
     {:name "object-location"
      :arguments {:slot slot
@@ -474,7 +474,6 @@
                  :segment segment
                  :region (:region segment)}
      :world "vstm"
-     :source source
      :type "relation"}))
 
 ;; Construct an outdated object location.
@@ -486,84 +485,82 @@
   {:name "object-location"
    :arguments (dissoc (:arguments loc) :segment)
    :world (:world loc)
-   :source (:source loc)
    :type (:type loc)})
 
 ;; outputs the object location map
-(defn- olmap-output [mat gaze source]
+(defn- olmap-output [mat gaze]
   {:name "object-location-map"
    :arguments {:data mat :gaze gaze}
    :world nil
-   :source source
    :type "instance"})
 
 (defrecord ObjectLocator [buffer parameters dims mexhats old-segments mat1 mat2
-                          sensor randomizer]
+                          sensor]
   Component
   (receive-focus
-   [component focus content]
-   (let [segmentation (d/first-element content :name (-> component :parameters :segmentation-type))
-         segments (:segments (:arguments segmentation))
-         gaze (:gaze (:arguments segmentation))
-         locations (obj/get-latest-locations content)
+    [component focus content]
+    (let [segmentation (d/first-element content :name (-> component :parameters :segmentation-type))
+          segments (:segments (:arguments segmentation))
+          gaze (:gaze (:arguments segmentation))
+          locations (obj/get-latest-locations content)
 
          ;;Map slots to old locations
-         slot->location
-         (update-location-with-bias
-          (make-location-hash focus content locations parameters)
-          (d/first-element content :name "fixation" :reason "maintenance")
-          content parameters)
+          slot->location
+          (update-location-with-bias
+           (make-location-hash focus content locations parameters)
+           (d/first-element content :name "fixation" :reason "maintenance")
+           content parameters)
 
-         unique-regions (->> slot->location vals (map :region) set seq)
-         untracked-regions (get-untracked-regions (map :region @old-segments) unique-regions)
+          unique-regions (->> slot->location vals (map :region) set seq)
+          untracked-regions (get-untracked-regions (map :region @old-segments) unique-regions)
 
          ;;Update our hats
-         new-mexhats
-         (when (:use-hats? parameters)
-           (olm/make-mexhats-for-regions (concat unique-regions untracked-regions)
-                                         @mexhats dims parameters))
+          new-mexhats
+          (when (:use-hats? parameters)
+            (olm/make-mexhats-for-regions (concat unique-regions untracked-regions)
+                                          @mexhats dims parameters))
 
          ;;Make the object location map
-         object-location-map
-         (when (:use-hats? parameters)
-           (draw-negative-object-location-map dims @mat1 unique-regions untracked-regions
-                                              new-mexhats gaze parameters))
+          object-location-map
+          (when (:use-hats? parameters)
+            (draw-negative-object-location-map dims @mat1 unique-regions untracked-regions
+                                               new-mexhats gaze parameters))
          ;;Maps slots to segments
-         [slot->segment object-location-map]
-         (cond
-           (:use-hats? parameters)
-           (assign-segments-by-object-location-map
-            segments slot->location object-location-map new-mexhats randomizer sensor parameters)
-           (:prefer-1-to-1? parameters)
-           [(assign-segments-1-to-1 segments slot->location parameters) nil]
-           :else
-           [(assign-segments segments slot->location parameters) nil])]
+          [slot->segment object-location-map]
+          (cond
+            (:use-hats? parameters)
+            (assign-segments-by-object-location-map
+             segments slot->location object-location-map new-mexhats sensor parameters)
+            (:prefer-1-to-1? parameters)
+            [(assign-segments-1-to-1 segments slot->location parameters) nil]
+            :else
+            [(assign-segments segments slot->location parameters) nil])]
 
-     (reset! (:old-segments component) segments)
-     (reset! (:mexhats component) new-mexhats)
-     (reset! old-mexhats new-mexhats)
+      (reset! (:old-segments component) segments)
+      (reset! (:mexhats component) new-mexhats)
+      (reset! old-mexhats new-mexhats)
 
-     (reset! (:buffer component)
-             (if (:saccading? (:arguments gaze))
-               (cons (olmap-output
-                      (draw-negative-object-location-map dims @mat1 nil nil nil nil parameters)
-                      gaze component)
-                     (map location->outdated-location locations))
-               (cons (olmap-output object-location-map gaze component)
-                     (remove nil?
-                             (map #(locate-object % (slot->segment %)
-                                                  component parameters)
-                                  (keys slot->segment))))))
+      (reset! (:buffer component)
+              (if (:saccading? (:arguments gaze))
+                (cons (olmap-output
+                       (draw-negative-object-location-map dims @mat1 nil nil nil nil parameters)
+                       gaze)
+                      (map location->outdated-location locations))
+                (cons (olmap-output object-location-map gaze)
+                      (remove nil?
+                              (map #(locate-object % (slot->segment %)
+                                                   parameters)
+                                   (keys slot->segment))))))
      ;;Swap cached matrices
-     (when (:use-hats? parameters)
-       (let [mat @(:mat1 component)]
-         (reset! (:mat1 component) @(:mat2 component))
-         (reset! (:mat2 component) mat)))))
+      (when (:use-hats? parameters)
+        (let [mat @(:mat1 component)]
+          (reset! (:mat1 component) @(:mat2 component))
+          (reset! (:mat2 component) mat)))))
 
 
   (deliver-result
     [component]
-    (set @(:buffer component))))
+    @buffer))
 
 (defmethod print-method ObjectLocator [comp ^java.io.Writer w]
   (.write w (format "ObjectLocator{}")))
@@ -576,12 +573,11 @@
         h (sensor/camera-height (:sensor p))]
     (reset! scores ())
     (->ObjectLocator
-      (atom ())
-      p
-      (when (:sensor p) [w h])
-      (if (:use-old-hats? p) (atom @old-mexhats) (atom {}))
-      (atom ())
-      (when (:sensor p) (atom (olm/initialize-object-location-matrix w h)))
-      (when (:sensor p) (atom (olm/initialize-object-location-matrix w h)))
-      (:sensor p)
-      (Random.))))
+     (atom ())
+     p
+     (when (:sensor p) [w h])
+     (if (:use-old-hats? p) (atom @old-mexhats) (atom {}))
+     (atom ())
+     (when (:sensor p) (atom (olm/initialize-object-location-matrix w h)))
+     (when (:sensor p) (atom (olm/initialize-object-location-matrix w h)))
+     (:sensor p))))

@@ -6,7 +6,8 @@
   (:require [arcadia.simulator.environment.core :refer [Environment]]
             [arcadia.utility [image :as img] [opencv :as cv]]
             [clojure.math.numeric-tower :refer [floor]]
-            [clojure.set :refer [difference]])
+            [clojure.set :refer [difference]]
+            [clojure.data.generators :as dgen])
   (:import [javax.swing JFrame]
            [java.awt Color Font RenderingHints]
            [java.awt.image BufferedImage]))
@@ -78,10 +79,10 @@
    :remaining-trials n-trials})
 
 (defn- next-stimulus [current-stimulus stimuli]
-  (rand-nth (seq (difference (set stimuli) #{current-stimulus}))))
+  (dgen/rand-nth (seq (difference (set stimuli) #{current-stimulus}))))
 
 (defn- next-cue [current-cue cues]
-  (rand-nth (seq (difference (set cues) #{current-cue}))))
+  (dgen/rand-nth (seq (difference (set cues) #{current-cue}))))
 
 (defn- draw-screen [env]
   (case (state-value env :display-type)

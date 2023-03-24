@@ -20,17 +20,18 @@
    :type "feedback"
    :world nil})
 
-(defrecord Feedback [buffer sensor] Component
+(defrecord Feedback [buffer sensor]
+  Component
   (receive-focus
-   [component focus content]
-   (->> sensor
-        poll
-        (map feedback)
-        (reset! (:buffer component))))
+    [component focus content]
+    (->> sensor
+         poll
+         (map feedback)
+         (reset! (:buffer component))))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method Feedback [comp ^java.io.Writer w]
   (.write w (format "Feedback{}")))

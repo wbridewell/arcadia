@@ -1,26 +1,12 @@
 (ns
   ^{:doc "Helper functions for debug display components."}
   arcadia.display.support
-  (:require clojure.walk
+  (:require [arcadia.architecture.registry :as reg]
             [arcadia.utility [general :as g] [parameters :as p]]))
 
 (def ^:private debug-namespace
   "Namespace for the debug display component."
   'arcadia.component.display)
-
-(defn get-point
-  "Checks whether data appears to be a 2D point, and returns [x y] if so."
-  [data]
-  (cond
-    (and (vector? data) (= (count data) 2) (every? number? data))
-    data
-
-    (and (map? data) (= (count data) 2) (:x data) (:y data))
-    [(:x data) (:y data)]
-
-    (or (= (type data) java.awt.Point)
-        (= (type data) org.opencv.core.Point))
-    [(.x data) (.y data)]))
 
 (defn initialize-debug-data
   "Initialize a debug data structure that will be used to record some information
@@ -62,10 +48,8 @@
 
 (defn- setup-state
   "Creates the hashmap holding the current state."
-  ([focus content debug-data]
-   (merge {:focus focus :content content} (debug-data->state debug-data)))
-  ([focus content debug-data element]
-   (merge {:focus focus :content content :element element} (debug-data->state debug-data))))
+  [focus content registry debug-data] 
+  (merge {:focus focus :content content :registry registry} (debug-data->state debug-data)))
 
 (defn caption-string
   "Creates the string that will depict a caption, using metadata to describe an
@@ -131,6 +115,12 @@
   [ifn state]
   (every? #(contains? state %) (-> ifn meta :referents)))
 
+(defn unresolved?
+  "Returns true if an element still needs to be resolved"
+  [elem]
+  (or (-> elem meta :unresolved?)
+      false))
+
 (defn- update-progression!
   "Takes a vector containing a progression atom of the form
    [current-value [check next-value] [check next-value] ...] Resolves the first
@@ -193,6 +183,13 @@
          (let [prev (-> e meta :previous)
                result (e (assoc state :previous @prev))]
            (recur (reset! prev result)))
+         e)
+       
+       (-> e meta :pause-function?)
+       (if (resolvable? e state)
+         (when (some? (e state))
+           (some-> state :registry reg/pause) 
+           "Pausing...")
          e)
 
        (-> e meta :information-function?)
@@ -331,12 +328,12 @@
 
 (defn resolve-parameters
   "Resolves all parameter values given the current ARCADIA state, if any. The
-   state can be provided either as a hashmap or as the focus, content, and a
-   debug-data structure."
+   state can be provided either as a hashmap or as the focus, content, registry, 
+   and a debug-data structure."
   ([params]
    (resolve-panels params))
-  ([params focus content debug-data]
-   (resolve-parameters params (setup-state focus content debug-data)))
+  ([params focus content registry debug-data]
+   (resolve-parameters params (setup-state focus content registry debug-data)))
   ([params state]
    (-> params
        (g/update-all resolve-value state)
@@ -411,7 +408,7 @@
   "If a parameter value has an atom, clone it, so that we have separate copies
    for each initialization of this parameter value."
   [params]
-  (clojure.walk/postwalk
+  (g/careful-postwalk
    #(cond
       (-> % meta :progression?)
       (with-meta (-> % first deref clone-parameters atom vector) {:progression? true})
@@ -421,8 +418,8 @@
 
       (-> % meta :paused?)
       (vary-meta % assoc :paused? (atom (-> % meta :paused? deref))
-               :stopped? (atom false) :stepped? (atom false))
-
+                 :stopped? (atom false) :stepped? (atom false)) 
+      
       :else
       %)
    params))

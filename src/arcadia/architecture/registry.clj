@@ -6,8 +6,9 @@
   the cycle number, and a list of components that perform logging."}
   arcadia.architecture.registry
   (:require [arcadia.component.core :as component]
-            [arcadia.utility [general :as g]
-                             [swing :as swing]]
+            [arcadia.utility.general :as g] 
+            [arcadia.utility.swing :as swing]
+            [clojure.data.generators :as dgen]
             [clojure.set]))
 
 ;; the component and sensor registries are implemented as maps between
@@ -24,19 +25,19 @@
   nil)
 
 (defn make-registry "Creates a registry for holding state during a model run."
-  [environment]
+  [environment deterministic?]
   {:environment environment
+   :deterministic? deterministic?
    :focus nil
    :content nil
    :strategy nil
    :component-registry nil
    :sensor-registry nil
    :cycle -1 ;;Should increment before each call to broadcast-focus
-   :logger-registry nil
-   :paused? (atom false)
-   :stopped? (atom false)
-   :stepped? (atom false)
-   :thread (atom nil)})
+   :display-support 
+   {:logger-registry nil :accessor-registry nil
+    :paused? (atom false) :pause-fns (atom nil) :stopped? (atom false)
+    :stepped? (atom false) :thread (atom nil)}})
 
 (defmacro with-registry
   "Sets *registry* to a particular registry just for the scope of this code."
@@ -46,21 +47,23 @@
 
 (defmacro with-bindings-for-run
   "Sets up any bindings that should be available throughout a model run."
-  [registry & code]
-  `(binding [*logger-registry* (:logger-registry ~registry)]
+  [registry randomizer & code]
+  `(binding [*logger-registry* (-> ~registry :display-support :logger-registry)
+             dgen/*rnd* ~randomizer]
             ~@code))
 
 (defn get-bindings-for-run
   "Returns the dynamic bindings set up for this run. Should not be called directly."
   []
-  *logger-registry*)
+  [*logger-registry* dgen/*rnd*])
 
 (defmacro invoke-with-bindings
   "Maintains the current logger bindings while entering the GUI thread."
   [& code]
-  `(let [registry# (arcadia.architecture.registry/get-bindings-for-run)]
+  `(let [[registry# randomizer#] (arcadia.architecture.registry/get-bindings-for-run)]
      (swing/invoke-now
-      (binding [*logger-registry* registry#]
+      (binding [*logger-registry* registry#
+                dgen/*rnd* randomizer#]
                ~@code))))
 
 (defn env
@@ -110,13 +113,13 @@
   ([]
    (control-atoms *registry*))
   ([registry]
-   (select-keys registry [:stopped? :paused? :stepped? :thread])))
+   (select-keys (:display-support registry) [:stopped? :paused? :pause-fns :stepped? :thread])))
 
 (defn stopped?
   "Returns true if a previous call to check-if-stopped indicated the model run
    should stop."
   [registry]
-  @(:stopped? registry))
+  (-> registry :display-support :stopped? deref))
 
 (defn content
   "Returns the content for a registry."
@@ -163,20 +166,31 @@
   (assoc registry :strategy strategy))
 
 (defn advance-cycle
-  "Increments the cycle counter and updates all the logger components."
+  "Increments the cycle counter and updates all the logger and accessor components."
   [registry]
-  (doseq [component (vals (:logger-registry registry))]
-    (component/reset-logger! component (:focus registry) (:content registry)))
-  (doseq [component (vals (:logger-registry registry))]
-    (component/update-logger! component))
+  (let [support (:display-support registry)]
+    (doseq [component (vals (:accessor-registry support))]
+      (component/update-registry! component registry))
+    (doseq [component (vals (:logger-registry support))]
+      (component/reset-logger! component (:focus registry) (:content registry)))
+    (doseq [component (vals (:logger-registry support))]
+      (component/update-logger! component)))
 
   (update registry :cycle inc))
+
+(defn pause
+  "Set the registry's :paused? flag to true."
+  [{{paused? :paused? pause-fns :pause-fns} :display-support :as registry}]
+  (when (not @paused?)
+    (reset! paused? true)
+    (->> pause-fns deref (map #(apply % nil)) doall))
+  registry)
 
 (defn check-if-paused
   "Checks whether the GUI thread has set the :paused? atom to true. If we are paused,
    wait until we unpause, or continue if the GUI thread has set the :stopped? or
    :stepped? atom to true. If :stepped? is true, set it to false after progressing."
-  [{stopped? :stopped? paused? :paused? stepped? :stepped? thread :thread
+  [{{stopped? :stopped? paused? :paused? stepped? :stepped? thread :thread} :display-support
     :as registry}]
   ;;If we are paused, then we will store the current thread so that the GUI
   ;;thread can interrupt us as soon as a button is pressed.
@@ -204,10 +218,12 @@
   (let [component-registry
         (-> (g/seq-valfun->map component-names start-fn)
             (g/filter-vals some?))]
-    (assoc registry
-           :component-registry component-registry
-           :logger-registry
-           (g/filter-vals component-registry #(satisfies? component/Logger %)))))
+    (-> registry 
+        (assoc :component-registry component-registry)
+        (assoc-in [:display-support :logger-registry] 
+                (g/filter-vals component-registry #(satisfies? component/Logger %)))
+        (assoc-in [:display-support :accessor-registry]
+                (g/filter-vals component-registry #(satisfies? component/Registry-Accessor %))))))
 
 (defn register-sensors
   "Sets up the sensors within the registry."
@@ -223,15 +239,21 @@
     (component/receive-focus x (:focus registry) (:content registry)))
   registry)
 
+(defn- update-source
+  "Given the set of interlingua elements produced by a component, update their :source 
+   to the specified alias."
+  [elements alias]
+  (->> elements (remove nil?) (map #(vary-meta % assoc :source (symbol alias)))))
+
 (defn collect-results
   "Calls deliver-result on each component and collects the results."
-  [registry]
-  (->> (components registry)
-       (map component/deliver-result)
-       (reduce clojure.set/union)
-       (remove nil?)
+  [{component-registry :component-registry :as registry}]
+  (->> component-registry keys
+       (map #(-> % component-registry component/deliver-result (update-source %)))
+       (reduce concat)
        (map #(vary-meta % assoc :cycle (cycle-num registry)))
-       set
+       ;; if not deterministic, this randomizes the order of the elements in content
+       (#(if (:deterministic? registry) % (set %)))
        (assoc registry :content)))
 
 (defn broadcast-to-logger

@@ -2,8 +2,8 @@
   "TODO: add documentation"
   (:import [javax.swing JFrame JPanel JScrollPane JLabel BoxLayout])
   (:require [arcadia.component.core :refer [Component Display merge-parameters]]
-            (arcadia.utility [swing :refer [invoke-now]] 
-                             [possible-relations :as prel] 
+            (arcadia.utility [swing :refer [invoke-now]]
+                             [possible-relations :as prel]
                              [relations :as rel])
             [clojure.string :refer [replace-first]]))
 ;;;;
@@ -17,10 +17,10 @@
 ;; create a frame large enough to support 2 100x100px images in each cell.
 (defn prepare-frame [f xloc yloc]
   (invoke-now
-    (doto f
-      (.setSize 400 300)
-      (.setLocation xloc yloc) ;; some place out of the way.
-      (.setVisible true)))
+   (doto f
+     (.setSize 400 300)
+     (.setLocation xloc yloc) ;; some place out of the way.
+     (.setVisible true)))
   f)
 
 
@@ -47,32 +47,32 @@
 
          (= (:name elmnt) "collision")
          (str "  " (:index (:arguments elmnt)) ": "
-             "Collision between "
-             (get-in elmnt [:arguments :agent :arguments :color] "undefined")
-             " "
-             (get-in elmnt [:arguments :agent :arguments :shape] "undefined")
-             " and "
-             (get-in elmnt [:arguments :patient :arguments :color] "undefined")
-             " "
-             (get-in elmnt [:arguments :patient :arguments :shape] "undefined"))
+              "Collision between "
+              (get-in elmnt [:arguments :agent :arguments :color] "undefined")
+              " "
+              (get-in elmnt [:arguments :agent :arguments :shape] "undefined")
+              " and "
+              (get-in elmnt [:arguments :patient :arguments :color] "undefined")
+              " "
+              (get-in elmnt [:arguments :patient :arguments :shape] "undefined"))
 
-        (= (:name elmnt) "relation")
-        (rel/to-string elmnt true true)))
+         (= (:name elmnt) "relation")
+         (rel/to-string elmnt true true)))
 
 (defn make-label [elmnt]
   (JLabel. (make-text elmnt)))
 
 (defn update-frame [f objs]
   (invoke-now
-     (let [p (JPanel.)
-           sorted-labels (sort-by #(some-> % .getText (replace-first #"\W" ""))
-                                  (map make-label objs))]
-       (.setLayout p (BoxLayout. p BoxLayout/Y_AXIS))
-       (doseq [x sorted-labels] (.add p x))
-       (.removeAll (.getContentPane f))
-       (.add (.getContentPane f) (JScrollPane. p))
-       (.revalidate (.getContentPane f))
-       (.repaint (.getContentPane f)))))
+   (let [p (JPanel.)
+         sorted-labels (sort-by #(some-> % .getText (replace-first #"\W" ""))
+                                (map make-label objs))]
+     (.setLayout p (BoxLayout. p BoxLayout/Y_AXIS))
+     (doseq [x sorted-labels] (.add p x))
+     (.removeAll (.getContentPane f))
+     (.add (.getContentPane f) (JScrollPane. p))
+     (.revalidate (.getContentPane f))
+     (.repaint (.getContentPane f)))))
 
 (defrecord WMDisplay [frame]
   Display
@@ -80,12 +80,12 @@
 
   Component
   (receive-focus
-   [component focus content]
-   (update-frame (:frame component)
-                 (filter #(= (:world %) "working-memory") content)))
+    [component focus content]
+    (update-frame (:frame component)
+                  (filter #(= (:world %) "working-memory") content)))
 
   (deliver-result
-   [component]))
+    [component]))
 
 (defmethod print-method WMDisplay [comp ^java.io.Writer w]
   (.write w (format "WMDisplay{}")))
@@ -94,5 +94,5 @@
   [& {:as args}]
   (let [p (merge-parameters args)]
     (->WMDisplay
-      (prepare-frame
-        (invoke-now (JFrame. (:display-name p))) (:x p) (:y p)))))
+     (prepare-frame
+      (invoke-now (JFrame. (:display-name p))) (:x p) (:y p)))))

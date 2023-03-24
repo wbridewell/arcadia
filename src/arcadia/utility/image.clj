@@ -17,6 +17,8 @@
            :high [10 255 255]}
           {:low [160 80 0]
            :high [180 255 255]}]
+   "orange" [{:low [11,40,0] 
+              :high [19,255,255]}] 
    "yellow" [{:low [20 100 100]
               :high [30 255 255]}]
    "green" [{:low [45 50 0]
@@ -156,18 +158,18 @@
    (resize-image mat width height proportional? nil))
   ([mat width height proportional? interpolation]
    (if proportional?
-     (let [[mwidth mheight] (cv/size mat)
+     (let [{mwidth :width mheight :height} (cv/size mat)
            ratio (min (/ width mwidth) (/ height mheight))]
-       (cv/resize mat [(int (* ratio mwidth)) (int (* ratio mheight))]
+       (cv/resize mat {:width (int (* ratio mwidth)) :height (int (* ratio mheight))}
                   :interpolation interpolation))
-     (cv/resize mat [width height] :interpolation interpolation))))
+     (cv/resize mat {:width width :height height} :interpolation interpolation))))
 
 ;; This is an auxillary function for bufferedimage-to-mat.
 (defn read-matrix
   "Convert a BufferedImage into an OpenCV matrix of the given type."
   [bi cvtype]
-  (let [read-mat (cv/new-java-mat [(.getWidth bi) (.getHeight bi)] cvtype)]
-    (cv/set-values read-mat 0 0 (.. bi getRaster getDataBuffer getData))
+  (let [read-mat (cv/new-java-mat {:width (.getWidth bi) :height (.getHeight bi)} cvtype)]
+    (cv/set-values! read-mat 0 0 (.. bi getRaster getDataBuffer getData))
     read-mat))
 
 ;;;;
@@ -359,18 +361,18 @@
           norm-channel (cv/normalize channel 0 img-height cv/NORM_MINMAX)
           bin-width (math/round (double (/ (cv/width image) bin-count)))]
       (dotimes [idx (dec bin-count)]
-        (cv/line image
-                 {:x (* bin-width idx)
-                  :y (- img-height (math/round (cv/get-value norm-channel 0 idx)))}
-                 {:x (* bin-width (inc idx))
-                  :y (- img-height (math/round (cv/get-value norm-channel 0 (inc idx))))}
-                 color :thickness 2 :line-type 8))
+        (cv/line! image
+                  {:x (* bin-width idx)
+                   :y (- img-height (math/round (cv/get-value norm-channel 0 idx)))}
+                  {:x (* bin-width (inc idx))
+                   :y (- img-height (math/round (cv/get-value norm-channel 0 (inc idx))))}
+                  color :thickness 2 :line-type 8))
       image)))
 
 (defn plot-color-histogram
   "Plots the HSV histogram."
   [histogram]
-  (let [image (cv/zeros [512 300] cv/CV_8UC3)]
+  (let [image (cv/zeros {:width 512 :height 300} cv/CV_8UC3)]
     (plot-color-channel (:hue histogram) image [255 0 0])
     (plot-color-channel (:saturation histogram) image [0 255 0])
     (plot-color-channel (:value histogram) image [0 0 255])))

@@ -48,8 +48,7 @@
                    :image img
                    :sensor (:sensor component)}
        :type "instance"
-       :world nil
-       :source component})))
+       :world nil})))
 
 (defrecord StroopSegmenter [sensor buffer parameters]
   Component
@@ -57,10 +56,10 @@
     [component focus content]
     (when-let [img (-> (poll (:sensor component)) :image)]
       (reset! (:buffer component) (get-segments img content component))))
-  
+
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method StroopSegmenter [comp ^java.io.Writer w]
   (.write w (format "StroopSegmenter{}")))

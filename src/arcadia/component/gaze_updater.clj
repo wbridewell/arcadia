@@ -97,7 +97,7 @@
        (+ (:pre-y-vel old-args) (gaze/velocity->incr (-> pursuit :arguments :y-acc) sensor))
        (:pre-y-vel old-args))]))
 
-(defn- update-gaze [old-args source pursuit sensor params]
+(defn- update-gaze [old-args pursuit sensor params]
   (let [[new-x-vel new-y-vel] (updated-velocities old-args sensor params)
         [x y] (updated-position new-x-vel new-y-vel old-args sensor params)
         cycles (if (:saccading? old-args) (- (:cycles old-args) 1) 0)
@@ -127,7 +127,6 @@
                                 ;;information like camera-increment.
                  :saccading? still-saccading?}
      :world nil
-     :source source
      :type "instance"}))
 
 
@@ -135,7 +134,7 @@
 ;;Saves pre-saccadic velocity, then calculates and adds in saccadic velocity
 ;;Marks this gaze as being a saccade
 ;;Records time (number of cycles) remaining in the saccade
-(defn- initiate-saccade [gaze saccade content source sensor]
+(defn- initiate-saccade [gaze saccade content sensor]
   (let [cycles (Math/ceil (gaze/duration->incr (-> saccade :arguments :duration) sensor))
         duration (gaze/duration->seconds cycles sensor)
         x-vel (/ (-> saccade :arguments :x-amp) duration)
@@ -155,7 +154,6 @@
                  :target (obj/updated-object (-> saccade :arguments :target) content)
                  :cycles cycles}
      :world nil
-     :source source
      :type "instance"}))
 
 ;;If there's no input at all (saccades, pursuit), then decelerate.
@@ -184,7 +182,7 @@
     (let [saccade (and (d/element-matches? focus :name "saccade") focus)
           gaze (d/first-element content :name "gaze")
           suppression (d/first-element content :name "gaze-movement-suppressor")
-          updated-gaze (update-gaze (:arguments gaze) component
+          updated-gaze (update-gaze (:arguments gaze)
                                     (d/first-element content :name "smooth-pursuit") sensor parameters)]
       (reset! (:buffer component)
               (cond
@@ -192,7 +190,7 @@
                 (decelerate updated-gaze sensor parameters)
 
                 (and updated-gaze saccade)
-                (initiate-saccade updated-gaze saccade content component sensor)
+                (initiate-saccade updated-gaze saccade content sensor)
 
                 :else
                 updated-gaze))
@@ -202,7 +200,7 @@
 
   (deliver-result
    [component]
-   #{@(:buffer component) (last @(:gaze-queue component))}))
+   (list @(:buffer component) (last @(:gaze-queue component)))))
 
 (defmethod print-method GazeUpdater [comp ^java.io.Writer w]
   (.write w (format "GazeUpdater{}")))

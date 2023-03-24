@@ -1,6 +1,6 @@
-(ns arcadia.component.episodic-memory
-  "Episodic Memory takes events from accessible content and stores them
-  in an episodic buffer based on value equality, so that events over time
+(ns arcadia.component.event-memory
+  "Event Memory takes events from accessible content and stores them
+  in a buffer based on value equality, so that events over time
   are merged into the same event stream.
 
   Event-streams have :start-age and :end-age arguments. :start refers to
@@ -17,23 +17,23 @@
     No.
 
   Default Behavior
-    -Encodes events into episodic-memory stream representations
-    -Broadcasts current episode to accessible content
-    -Broadcasts episode history into accessible content
+    -Encodes events into event stream representations
+    -Broadcasts current event episode to accessible content
+    -Broadcasts event history into accessible content
     -Ages event-streams, and drops streams older than event-lifespan
      (streams can also specify the lifespan of their own events using
      the keyword :event-lifespan)
 
   Produces
-    event-stream- in the \"episodic-memory\" world, an event-stream
-                  element is put out for each event-stream that is
-                  active within the current episode
-    history- this is an element storing a stack of all previous episodes
-             (excluding the current episode) in its :episodes argument."
+    event-episode - in the \"episodic-memory\" world, an event-stream
+                    element is put out for each event-stream that is
+                    active within the current episode
+    history- this is an element storing a stack of all previous events
+             (excluding the current event stream) in its :events argument."
   (:require [arcadia.component.core :refer [Component merge-parameters]]
             [arcadia.utility [events :as events] [general :as g] [descriptors :as d]]))
 
-;; TODO: need to create utility functions for retrieving episodes
+;; TODO: need to create utility functions for retrieving events
 ;;       from the history element in order to encapsulate log compression.
 ;;
 
@@ -44,13 +44,12 @@
 (def ^:parameter ^:required descriptors "a sequence of descriptors (required)" nil)
 
 (defn- episode
-  "Create an episode for the current context of event-streams"
+  "Create an event-episode for the current context of event-streams"
   [component]
-  {:name "episode"
+  {:name "event-episode"
    :arguments {:context @(:event-streams component)}
    :type "instance"
-   :world "episodic-memory"
-   :source component})
+   :world "episodic-memory"})
 
 (defn- age
   "Increase the age of the event-stream by one."
@@ -73,8 +72,8 @@
        (or (-> event-stream :arguments :event-lifespan)
            (:event-lifespan component)))))
 
-(defn- new-episode?
-  "Return true if some event-stream has changed from the previous episode to the present."
+(defn- new-event?
+  "Return true if some event-stream has changed from the previous event to the present one."
   [component]
   (or (empty? @(:episodes component))
       (let [prev (-> @(:episodes component) first :arguments :context)]
@@ -90,45 +89,45 @@
   {:name "history"
    :arguments {:episodes @(:episodes component)}
    :type "instance"
-   :world "episodic-memory"
-   :source component})
+   :world "episodic-memory"})
 
-(defrecord EpisodicMemory [event-streams episodes descriptors event-lifespan] Component
+(defrecord EventMemory [event-streams episodes descriptors event-lifespan]
+  Component
   (receive-focus
-   [component focus content]
+    [component focus content]
    ;; increase the age of all event-streams, removing any which
    ;; have aged beyond event-lifespan
-   (reset! (:event-streams component)
-           (remove (partial ended? component)
-                  (map age @(:event-streams component))))
-   (reset! (:episodes component)
-           (map (fn [e] (update-in e [:arguments :context] (partial map age))) @(:episodes component)))
+    (reset! (:event-streams component)
+            (remove (partial ended? component)
+                    (map age @(:event-streams component))))
+    (reset! (:episodes component)
+            (map (fn [e] (update-in e [:arguments :context] (partial map age))) @(:episodes component)))
 
    ;; if there are new events, encode them as event-streams,
    ;; and merge them into existing event-streams
-   (when-let [new-events (seq (map #(events/event-stream % component content)
-                                   (d/filter-elements content :name "event" :world nil)))]
+    (when-let [new-events (seq (map #(events/event-stream % component content)
+                                    (d/filter-elements content :name "event" :world nil)))]
      ;; update the event-streams
-     (reset! (:event-streams component)
+      (reset! (:event-streams component)
              ;; get rid of old versions of the new events
-             (g/distinctp #(events/event-stream-equals %1 %2 (:descriptors component))
-                          (concat new-events @(:event-streams component))))
+              (g/distinctp #(events/event-stream-equals %1 %2 (:descriptors component))
+                           (concat new-events @(:event-streams component))))
 
      ;; if the state of event-streams has changed at all, create a new episode
-     (when (new-episode? component)
-       (swap! (:episodes component) conj (episode component)))))
+      (when (new-event? component)
+        (swap! (:episodes component) conj (episode component)))))
 
   (deliver-result
-   [component]
-   (into #{(history component)} @(:event-streams component))))
+    [component]
+    (into (list (history component)) @(:event-streams component))))
 
-(defmethod print-method EpisodicMemory [comp ^java.io.Writer w]
-  (.write w (format "EpisodicMemory{}")))
+(defmethod print-method EventMemory [comp ^java.io.Writer w]
+  (.write w (format "EventMemory{}")))
 
 (defn start
- "Start the EpisodicMemory component. By default, retain events from
+  "Start the EventMemory component. By default, retain events from
   the past [default-event-lifespan] cycles. Optionally, models can choose
   an arbitrary lifespan. "
   [& {:as args}]
   (let [p (merge-parameters args)]
-    (->EpisodicMemory (atom nil) (atom nil) (:descriptors p) (:event-lifespan p))))
+    (->EventMemory (atom nil) (atom nil) (:descriptors p) (:event-lifespan p))))

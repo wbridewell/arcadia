@@ -37,32 +37,29 @@
 
 (defn- task-wmify
   "Build an element that outputs the working memory representation of the current task."
-  [task source]
+  [task]
   {:name "task"
    :arguments task
    :type "instance"
-   :world "task-wm"
-   :source source})
+   :world "task-wm"})
 
 (defn- adopt-strategy
   "Build an element that requests a new attentional strategy be adopted. The
   strategy function is built from the specification in the task."
-  [task source]
+  [task]
   {:name "adopt-attentional-strategy"
    :arguments {:strategy (att/build-dynamic-strategy (:strategy task))
                :handle (:handle task)}
-   :world nil
-   :source source
+   :world nil 
    :type "action"})
 
 (defn- memory-retrieval
   "Build an element that requests the task schemas with the given names."
-  [task-names source]
+  [task-names]
   {:name "memory-retrieval"
    :arguments {:lexemes task-names}
    :type "action"
-   :world nil
-   :source source})
+   :world nil})
 
 (defn- switch-task
   "Build the response for a task-switch request."
@@ -154,49 +151,48 @@
 (defrecord TaskHierarchy [buffer tasks hierarchy]
   Component
   (receive-focus
-   [component focus content]
+    [component focus content]
    ;; update the hierarchy if requested
-   (when (d/element-matches? focus :name "update-task-hierarchy" :type "action" :world nil)
-     (reset! (:tasks component) nil)
-     (reset! (:hierarchy component) (-> focus :arguments :task-hierarchy)))
+    (when (d/element-matches? focus :name "update-task-hierarchy" :type "action" :world nil)
+      (reset! (:tasks component) nil)
+      (reset! (:hierarchy component) (-> focus :arguments :task-hierarchy)))
 
    ;; schemata = {"task-name-1" task-schema-1 "task-name-2" task-schema-2 ...}
-   (let [schemata (apply hash-map (mapcat #(vector (-> % :arguments :task-name) (-> % :arguments :task))
-                                          (d/filter-elements content :name "task-schema")))]
-     (cond
+    (let [schemata (apply hash-map (mapcat #(vector (-> % :arguments :task-name) (-> % :arguments :task))
+                                           (d/filter-elements content :name "task-schema")))]
+      (cond
        ;; this option occurs when you have requested the tasks mentioned by a
        ;; new hierarchy and they were made available by long term memory.
-       (and (seq schemata) (nil? @(:tasks component)))
-       (let [inst-hierarchy (instantiate-hierarchy @(:hierarchy component) schemata)
-             top-task (get inst-hierarchy (-> component :hierarchy deref :top))]
+        (and (seq schemata) (nil? @(:tasks component)))
+        (let [inst-hierarchy (instantiate-hierarchy @(:hierarchy component) schemata)
+              top-task (get inst-hierarchy (-> component :hierarchy deref :top))]
         ;; automatically enter the top task in the hierarchy
-        (reset! (:tasks component) inst-hierarchy)
-        (reset! (:buffer component) [(task-wmify top-task component)
-                                     (adopt-strategy top-task component)]))
+          (reset! (:tasks component) inst-hierarchy)
+          (reset! (:buffer component) [(task-wmify top-task)
+                                       (adopt-strategy top-task)]))
 
        ;; this option occurs when you just changed hierarchies and need to get
        ;; the tasks that it refers to
-       (nil? @(:tasks component))
-       (reset! (:buffer component) [(memory-retrieval (-> component :hierarchy deref :nodes vals set)
-                                                     component)])
+        (nil? @(:tasks component))
+        (reset! (:buffer component) [(memory-retrieval (-> component :hierarchy deref :nodes vals set))])
 
        ;; process task switches if we're not in the process of rebuilding the hierarchy
        ;; need to do this last or else we might get stale task switches instead
        ;; activates the task specified by the name in the task switch
-       (d/element-matches? focus :name "switch-task" :type "action" :world nil)
-       (when-let [task (get @(:tasks component) (-> focus :arguments :task-name))]
-         (reset! (:buffer component)
-                 [(task-wmify task component)
-                  (adopt-strategy task component)]))
+        (d/element-matches? focus :name "switch-task" :type "action" :world nil)
+        (when-let [task (get @(:tasks component) (-> focus :arguments :task-name))]
+          (reset! (:buffer component)
+                  [(task-wmify task)
+                   (adopt-strategy task)]))
 
       ;; in the normal case, we just report the current task
       ;; the take will drop the adopt-strategy element if it exists
-      :else
-      (reset! (:buffer component) (take 1 @(:buffer component))))))
+        :else
+        (reset! (:buffer component) (take 1 @(:buffer component))))))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method TaskHierarchy [comp ^java.io.Writer w]
   (.write w (format "TaskHierarchy{%s}" (-> comp :hierarchy deref :top))))

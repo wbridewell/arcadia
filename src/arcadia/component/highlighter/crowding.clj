@@ -26,7 +26,7 @@
        :threat-pixel-distance and a normalized :threat-distance to the
        nearest proto-object. The :reason for the fixation is \"crowding\"."
   (:require [arcadia.component.core :refer [Component merge-parameters]]
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             [arcadia.utility [general :as g] [objects :as obj]]))
 
 (def ^:parameter crowding-dist
@@ -40,13 +40,13 @@
   :all)
 
 (defn- region-distance [r1 r2]
-  (reg/distance (reg/center r1) (reg/center r2)))
+  (geo/distance (geo/center r1) (geo/center r2)))
 
 (defn- normalize-distance
   "Normalizes the distance between an object and a crowding threat by dividing by the diameter of the second region.
   The radius is treated as the average of the region's height and width."
   [distance threat]
-  (/ distance (-> threat :region reg/radius (* 2))))
+  (/ distance (-> threat :region geo/radius (* 2))))
 
 (defn- make-fixation
   "Create a fixation to the object due to crowding caused by a nearby segment (threat),
@@ -65,7 +65,6 @@
                    :crowded? (< norm-distance (:crowding-dist (:parameters source)))
                    :reason "crowding"}
        :world nil
-       :source source
        :type "instance"})))
 
 (defn- get-threat
@@ -79,7 +78,7 @@
   breaking ties by preferring fixations to the focus-region."
   [fixation1 fixation2 focus-region content]
   (if (g/near-equal? (-> fixation1 :arguments :threat-pixel-distance)
-                   (-> fixation2 :arguments :threat-pixel-distance))
+                     (-> fixation2 :arguments :threat-pixel-distance))
     (obj/same-region? fixation1 focus-region content)
     (compare (-> fixation1 :arguments :threat-pixel-distance)
              (-> fixation2 :arguments :threat-pixel-distance))))
@@ -87,30 +86,30 @@
 (defrecord CrowdingHighlighter [buffer parameters old-segments]
   Component
   (receive-focus
-   [component focus content]
-   (let [fixations (some->> (obj/get-vstm-objects content :tracked? true)
-                            (map #(make-fixation % (get-threat (obj/get-region % content)
-                                                               @(:old-segments component))
-                                                 content component))
-                            (remove nil?)
-                            (sort #(crowding-comp %1 %2 (obj/get-region focus content) content))
-                            vec
+    [component focus content]
+    (let [fixations (some->> (obj/get-vstm-objects content :tracked? true)
+                             (map #(make-fixation % (get-threat (obj/get-region % content)
+                                                                @(:old-segments component))
+                                                  content component))
+                             (remove nil?)
+                             (sort #(crowding-comp %1 %2 (obj/get-region focus content) content))
+                             vec
                             ;; set the most-crowded? tag of the first item to true
                             ;; if there are any fixations left
-                            (g/apply-if seq #(assoc-in % [0 :arguments :most-crowded?] true)))]
-     (reset! (:buffer component)
-             (condp = (:strategy parameters)
-               :take-first (first fixations)
-               :all-below-threshold (filter #(-> % :arguments :threat-distance
-                                                 (< (:crowding-dist parameters)))
-                                            fixations)
-               :all fixations))
-     (reset! (:old-segments component)
-             (->> content (g/find-first #(= (:name %) "image-segmentation")) :arguments :segments))))
+                             (g/apply-if seq #(assoc-in % [0 :arguments :most-crowded?] true)))]
+      (reset! (:buffer component)
+              (condp = (:strategy parameters)
+                :take-first (first fixations)
+                :all-below-threshold (filter #(-> % :arguments :threat-distance
+                                                  (< (:crowding-dist parameters)))
+                                             fixations)
+                :all fixations))
+      (reset! (:old-segments component)
+              (->> content (g/find-first #(= (:name %) "image-segmentation")) :arguments :segments))))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method CrowdingHighlighter [comp ^java.io.Writer w]
   (.write w (format "CrowdingHighlighter{}")))

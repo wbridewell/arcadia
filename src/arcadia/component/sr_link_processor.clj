@@ -25,23 +25,23 @@
             [arcadia.utility [descriptors :as d]
              [tasks :as tasks]]))
 
-(defn- action-request [request component]
-  (assoc request :source component :type "action" :world nil))
+(defn- action-request [request]
+  (assoc request :type "action" :world nil))
 
 (defrecord SRLinkProcessor [buffer]
   Component
   (receive-focus
-   [component focus content]
+    [component focus content]
    ;; always grabs the current set of sr-links.
    ;; does not pause processing during a task switch, so stale rules can fire.
-   (when-let [task (d/first-element content :name "task" :type "instance" :world "task-wm")]
-     (reset! (:buffer component)
-             (map #(action-request % component)
-                  (tasks/collect-responses (-> task :arguments :stimulus-responses) content)))))
+    (when-let [task (d/first-element content :name "task" :type "instance" :world "task-wm")]
+      (reset! (:buffer component)
+              (map #(action-request %)
+                   (tasks/collect-responses (-> task :arguments :stimulus-responses) content)))))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method SRLinkProcessor [comp ^java.io.Writer w]
   (.write w (format "SRLinkProcessor{}")))

@@ -39,20 +39,20 @@
   ;; Must be called within the Swing EDT
   (let [main-p (JPanel.)]
     (doto main-p
-       (.setLayout (BoxLayout. main-p BoxLayout/X_AXIS))
-       (.setBorder (BorderFactory/createEtchedBorder))
-       (.add b1)
-       (.add b2))))
+      (.setLayout (BoxLayout. main-p BoxLayout/X_AXIS))
+      (.setBorder (BorderFactory/createEtchedBorder))
+      (.add b1)
+      (.add b2))))
 
 (defn- prepare-frame
   "Initialize a frame for displaying two buttons."
   [f xloc yloc]
   (swing/invoke-now
-       (doto f
-        (.setSize 215 60)
-        (.setLocation xloc yloc)
-        (.add (swing-object-panel))
-        (.setVisible true)))
+   (doto f
+     (.setSize 215 60)
+     (.setLocation xloc yloc)
+     (.add (swing-object-panel))
+     (.setVisible true)))
   f)
 
 (defn- update-frame
@@ -61,12 +61,12 @@
   (swing/invoke-now
       ;; either even-high or odd-low is pressed for the target model, so
       ;; if we're here, it's mutually exclusive.
-      (if (= (-> env-action :arguments :action-command) :b-even-high)
-        (.doClick b2 500)
-        (.doClick b1 500))
-      (doto (.getContentPane frame)
-        (.revalidate)
-        (.repaint))))
+   (if (= (-> env-action :arguments :action-command) :b-even-high)
+     (.doClick b2 500)
+     (.doClick b1 500))
+   (doto (.getContentPane frame)
+     (.revalidate)
+     (.repaint))))
 
 (defrecord TwoButtonDisplay [frame]
   Display
@@ -74,12 +74,12 @@
 
   Component
   (receive-focus
-   [component focus content]
+    [component focus content]
     ;; ignore content
-   (when-let [ea (gen/find-first #(and (= (:type %) "environment-action")
-                                       (= (:name %) "push-button"))
-                         content)]
-     (update-frame (:frame component) ea)))
+    (when-let [ea (gen/find-first #(and (= (:type %) "environment-action")
+                                        (= (:name %) "push-button"))
+                                  content)]
+      (update-frame (:frame component) ea)))
 
   (deliver-result [component]))
 

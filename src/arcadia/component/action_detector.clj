@@ -24,7 +24,6 @@
       (reset! (:buffer component)
               {:name "event"
                :type "instance"
-               :source component
                :world nil
                :arguments {:event-name "action"
                            :button-id (-> focus :arguments :button-id)
@@ -33,7 +32,7 @@
   
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method ActionDetector [comp ^java.io.Writer w]
   (.write w (format "ActionDetector{}")))

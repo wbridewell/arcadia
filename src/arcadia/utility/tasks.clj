@@ -108,5 +108,4 @@
                :task task-kw
                :effector :articulator}
    :world nil
-   :source nil
    :type "action"})

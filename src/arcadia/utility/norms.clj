@@ -46,7 +46,7 @@
                               [~agent rel#]     ;; arguments
                               [(get-descriptor ('~agent args#) ~object-descriptors)
                                {:label (to-string rel# true)}]  ;; argument descriptors/labels
-                              "real" nil)
+                              "real")
                       :world "normal"))))]
     `{:name "norm"
       :arguments {:name ~name
@@ -59,8 +59,7 @@
                   :agent '~agent
                   :content '~content}
       :type "instance"
-      :world nil
-      :source nil}))
+      :world nil}))
 
 (defn resolved? [omission-event object-descriptors episodes content]
   (or (some #(let [o (-> omission-event :arguments :omission :arguments :arguments second)]

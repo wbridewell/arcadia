@@ -24,32 +24,30 @@
 ;; Task specific, consider exposing at the instantiation level.
 (def ^:private magnitude-threshold 5)
 
-(defn- make-magnitude [o v source]
-    {:name "object-property"
-     :arguments {:property :magnitude
-                 :value v
-                 :object o}
-     :world nil
-     :source source
-     :type "instance"})
+(defn- make-magnitude [o v]
+  {:name "object-property"
+   :arguments {:property :magnitude
+               :value v
+               :object o}
+   :world nil
+   :type "instance"})
 
 (defrecord NumberMagnitudeReporter [buffer]
   Component
   (receive-focus
-   [component focus content]
+    [component focus content]
 
-   (if (and (= (:type focus) "instance")
-            (= (:name focus) "object")
-            (-> focus :arguments :number))
-     (reset! (:buffer component)
-             (make-magnitude focus
-                          (if (> (->  focus :arguments :number) magnitude-threshold) :high :low)
-                          component))
-     (reset! (:buffer component) nil)))
+    (if (and (= (:type focus) "instance")
+             (= (:name focus) "object")
+             (-> focus :arguments :number))
+      (reset! (:buffer component)
+              (make-magnitude focus
+                              (if (> (->  focus :arguments :number) magnitude-threshold) :high :low)))
+      (reset! (:buffer component) nil)))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method NumberMagnitudeReporter [comp ^java.io.Writer w]
   (.write w (format "NumberMagnitudeReporter{}")))

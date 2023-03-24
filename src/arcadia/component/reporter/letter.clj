@@ -37,12 +37,12 @@
   "Transform an image to the point that Tesseract OCR identify any letters."
   [img mask]
   (-> img (cv/cvt-color cv/COLOR_BGR2GRAY) (cv/convert-to cv/CV_8UC1)
-      (cv/gaussian-blur! [3 3])
+      (cv/gaussian-blur! {:width 3 :height 3})
       (cv/threshold! 10 cv/THRESH_BINARY :max-value 255)
-      (cv/erode! [2 2])
+      (cv/erode! {:width 2 :height 2})
       (cv/copy :dst (cv/new-mat img :type cv/CV_8UC1 :value 255) :mask mask)
-      (cv/resize [300 300])
-      ;(cv/gaussian-blur! [3 3]) <--Due to an error in the old code, this step wasn't happening
+      (cv/resize {:width 300 :height 300})
+      ;(cv/gaussian-blur! {:width 3 :height 3}) <--Due to an error in the old code, this step wasn't happening
       img/mat-to-bufferedimage))
 
 (defn tesseract-ocr
@@ -86,16 +86,16 @@
                                 (:whitelist (:params component))))))))
   (deliver-result
    [component]
-   (when (and @(:buffer component) (not (.isEmpty @(:buffer component))))
+   (when (and @buffer (not (.isEmpty @buffer)))
      ;(println "   LETTER REPORTER-------->" @(:buffer component))
-     #{{:name "object-property"
+     (list
+      {:name "object-property"
         ;; might be useful to also return the segment
-        :arguments {:property :character
-                    :value @(:buffer component)
-                    :object @(:object component)}
-        :world nil
-        :source component
-        :type "instance"}})))
+       :arguments {:property :character
+                   :value @(:buffer component)
+                   :object @(:object component)}
+       :world nil 
+       :type "instance"}))))
 
 (defmethod print-method LetterReporter [comp ^java.io.Writer w]
   (.write w (format "LetterReporter{}")))

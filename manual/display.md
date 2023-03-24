@@ -166,7 +166,7 @@ In addition to using information functions to extract elements, we can use them 
     :center? true :bold? true]
    ["Focus" (i# (-> % :focus :name))
     :italic? true :caption-italic? false]
-   [(i# (-> % :focus :arguments :image))              ;;
+   [(i# (-> % :focus :arguments :image))                  ;;
     :element-type :image :image-width 80 :image-height 80];;
    [(i# (-> % :image))                                    ;;
     :element-type :image :image-scale 0.25]]})            ;;
@@ -191,14 +191,14 @@ We have two new elements in this example, both of them images. When an element i
  display
  {:x 50 :y 50
   :panel-width 300
-  :panel-height 300                                      ;;      
+  :panel-height 300                                          ;;      
   :caption-width 80
   :flatten-elements? true                                    ;;
   :elements
   [["Object"                                                 ;;
     (i# (-> % :content                                       ;;
             (filter-elements :name "object" :world "vstm"))) ;;
-    :element-value (i# (-> % :element :arguments :image));;
+    :element-value (i# (-> % :element :arguments :image))    ;;
     :element-type :image :image-width 80 :image-height 80]]});;
 ```
 
@@ -206,7 +206,7 @@ Sometimes, it can be cumbersome or impossible to type out each individual elemen
 
 In this example, we don't want to display the entire interlingua element describing each object. Rather, we want to display each object's `:image` argument (the image showing what the object looks like). To do this, we use the `:element-value` parameter to specify an information function that will be called separately for each item in the list. We can see that this information function uses a new key, `:element`, which refers to the current element, in this case the vstm object. When `:element-value` is provided, it indicates that we want to display whatever it specifies, rather than displaying the element as a whole.
 
-As a reminder, we've now discussed four keys that can be used by information functions: `:focus`, `:content`, `:image` (the visual input, available only when a `:sensor` is provided), and `:element` (the current element). So now we can think of the information function's input as being `{:focus focus :content content :image image :element element)`.
+As a reminder, we've now discussed four keys that can be used by information functions: `:focus`, `:content`, `:image` (the visual input, available only when a `:sensor` is provided), and `:element` (the current element). So now we can think of the information function's input as being `{:focus focus :content content :image image :element element}`.
 
 Lastly, one important note: in all the previous examples, the component was able to determine the height of the display automatically, based on the elements to be displayed. In this example, that isn't possible. Because `:flatten-elements?` is `true`, the number of elements to display will vary depending on the number of objects in vstm. Therefore, we must specify the height of the display directly, using the `:panel-height` parameter.
 
@@ -270,8 +270,8 @@ Although each panel corresponds to an object in vstm, the display does not show 
   :flatten-panels? true
   :rows 2 :cols 2
   :element-type :image :image-width 120 :image-height 120
-  :header-color java.awt.Color/red                          ;;
-  :header-background java.awt.Color/green                   ;;
+  :header-color :red                                    ;;
+  :header-background :green                             ;;
   :panels
   [[(i# (-> % :panel :arguments :slot))                 ;;
     (i# (-> % :content
@@ -282,7 +282,7 @@ Although each panel corresponds to an object in vstm, the display does not show 
 
 Just as we wanted distinct captions for each element in the older example, here we might want distinct headers for each panel. We can do so in the same way, by specifying an information function that returns the panel's slot argument.
 
-Just for fun, we've also added some color in this version. The `:header-color` parameter specifies the text color of the headers, whereas the `:header-background` specifies the background color. Note that colors always need to be `java.awt.Color` objects.
+Just for fun, we've also added some color in this version. The `:header-color` parameter specifies the text color of the headers, whereas the `:header-background` specifies the background color. Note that colors can be keywords (e.g., `:red`), strings (e.g., `"blue"`), or vectors (e.g., `[0 0 110]`).
 
 
 <br><br>
@@ -303,13 +303,13 @@ Just for fun, we've also added some color in this version. The `:header-color` p
             (filter-elements :name "object" :world "vstm")))]]
   :elements
   [[(i# (-> % :panel :arguments :image))]
-   ["location" (i# (-> % :panel :arguments :region reg/center));;
+   ["location" (i# (-> % :panel :arguments :region geo/center));;
     :element-type :text :center? false]]})                     ;;
 ```
 
 
 Panels may contain more than one element. In this example, we've added a second element: each vstm object's location. We've used the information function:
-`(i# (-> % :panel :arguments :region reg/center))`, which extracts each panel's (in this case, each vstm object's) region and calls the regions function `center` to get a point representing the center of the object's location.
+`(i# (-> % :panel :arguments :region geo/center))`, which extracts each panel's (in this case, each vstm object's) region and calls the regions function `center` to get a point representing the center of the object's location.
 
 Note that 2D points are displayed in the form `(x, y)`, by default. If you want to display points in their original form, set the parameter `:pretty-points?` to `false`.
 
@@ -335,7 +335,7 @@ We need to specify that this new element's type is `:text` because the overall e
             (filter-elements :name "object" :world "vstm")))]]
   :elements
   [[(i# (-> % :panel :arguments :image))]
-   ["location" (i# (-> % :panel :arguments :region reg/center))
+   ["location" (i# (-> % :panel :arguments :region geo/center))
     :element-type :text :center? false :precision 0]]})        ;;
 ```
 
@@ -354,19 +354,19 @@ One minor issue with the previous example is that the locations are displayed wi
   :image-scale 0.5
   :sensor (get-sensor :stable-viewpoint)
   :elements
-  [[java.awt.Color/black]]
+  [[(blank-canvas :black)]]
   :glyphs
   [[(i# (-> % :content
             (filter-elements :name "object-location")))
     :glyph-value (i# (-> % :glyph :arguments :region))
-    :color java.awt.Color/green]]})
+    :color :green]]})
 ```
 
 In addition to specifying a list of panels and a list of elements, we can specify a list of glyphs. Glyphs are annotations that will be drawn on top of image elements before displaying them.
 
-Consider this example. We have just a single element, whose value is a color, `java.awt.Color/black`. When an element is a color and the `:element-type` is `:image`, the element is displayed as a rectangle with the specified color. Because `:image-scale` is 0.5, the rectangle is half the size of the visual input.
+Consider this example. We have just a single element, created using `blank-canvas`. `blank-canvas` is an alternative to `i#` which indicates that the element should be an image with the specified color and the same dimensions as the visual input, subject to any scaling. Here, because `:image-scale` is 0.5, the image is half the size of the visual input. This solidly black image will be the canvas onto which glyphs are drawn.
 
-We've specified one glyph, which will be drawn onto a black image. Glyphs are specified with the vector [glyph optional-param-name optional-param-value ...]. Here, the glyph is specified with an information function that returns the list of `object-locations` from accessible content. Note that unlike panels and elements, glyphs are always flattened: each item in the list of `object-locations` will be drawn as a distinct glyph.
+Glyphs are specified with the vector [glyph optional-param-name optional-param-value ...]. Here, the glyphs are specified with an information function that returns the list of `object-location` elements from accessible content. Note that unlike panels and elements, glyphs are always flattened: each item in the list of `object-location` elements will be drawn as a distinct glyph.
 
 Earlier, we saw an example of using `:element-value` to specify what part of an element should be displayed. Similarly, here we use `:glyph-value` to specify what part of the glyph should be displayed. In this case, we want to display a rectangle representing each object-location's region. The information function uses the `:glyph` key, which refers to the current glyph (in this case, the `object-location`).
 
@@ -383,18 +383,18 @@ Finally, we specify that the rectangles should be green in color.
   :image-scale 0.5
   :sensor (get-sensor :stable-viewpoint)
   :elements
-  [[java.awt.Color/black]]
+  [[(blank-canvas :black)]]
   :glyphs
   [[(i# (-> % :content                                    ;;
             (first-element :name "image-segmentation")    ;;
             :arguments :segments))                        ;;
-   :glyph-value (i# (-> % :glyph :image))             ;;
+   :glyph-value (i# (-> % :glyph :image))                 ;;
    :glyph-region (i# (-> % :glyph :region))               ;;
-   :glyph-mask (i# (-> % :glyph :mask))]           ;;
+   :glyph-mask (i# (-> % :glyph :mask))]                  ;;
    [(i# (-> % :content
               (filter-elements :name "object-location")))
      :glyph-value (i# (-> % :glyph :arguments :region))
-     :color java.awt.Color/green]]})
+     :color :green]]})
 ```
 
 Remember those segments we were counting back in the Information Functions section? Let's draw those segments directly onto the image, so that we can see what they look like and where they are located. For this example, our glyph's information function returns the list of segments in the `image-segmentation`. We use `:glyph-value` to specify what will be displayed (each segment's `:image` field). We use `:glyph-region` to specify where each image will be displayed (within each segment's region). Finally, we use `:glyph-mask` to provide an alpha mask indicating what parts of each image to copy over (this is optional).
@@ -410,7 +410,7 @@ Remember those segments we were counting back in the Information Functions secti
   :image-scale 0.5
   :sensor (get-sensor :stable-viewpoint)
   :elements
-  [[java.awt.Color/black]]
+  [[(blank-canvas :black)]]
   :glyphs
   [[(i# (-> % :content
             (first-element :name "image-segmentation")
@@ -421,22 +421,39 @@ Remember those segments we were counting back in the Information Functions secti
    [(i# (-> % :content
             (filter-elements :name "object-location")))
     :glyph-value (i# (-> % :glyph :arguments :region))
-    :color java.awt.Color/green]
+    :color :green]
    [(i# (-> % :content                                          ;;
             (filter-elements :name "object-location")))         ;;
     :glyph-value (i# (-> % :glyph :arguments :slot))            ;;
     :glyph-region (i# (-> % :glyph :arguments :region))         ;;
     :y-offset -10                                               ;;
-    :color java.awt.Color/green]]})                             ;;
+    :color :green]]})                                           ;;
 ```
 
-So far, we've seen two types of glyphs: rectangles and images. The display also supports a third type: text, which can be written directly onto the image. In this example, the text is the slot number for each `object-location`.
+So far, we've seen two types of glyphs: rectangles and images. The display also supports a third type: text, which can be written directly onto the image. In this example, the text is the slot number for each `object-location`. The following datatypes may be displayed as text: strings, keywords, symbols, and numbers.
 
 As in the previous example, we use `:glyph-value` to specify what is to be displayed, and `:glyph-region` to specify where it should be displayed. In addition, we use `:y-offset` to specify that the glyph should actually be displayed 10 pixels above this location. Thus, we can display the text above the rectangles.
 
 <br><br>
 
 ## Alternatives to Information Functions
+
+Thus far, our examples have relied heavily on information functions to specify elements, panels, glyphs, and some parameter values. However, there are variants and alternatives that can be used in the place of information functions. Like `i#`, these are defined in `arcadia.utility.display`. Thus far, we have seen a single alternative, `blank-canvas`, but several more will be described here.
+
+```Clojure
+(model/add
+ display.scratchpad
+ {:x 50 :y 50
+  :elements
+  [[(pause-fn (-> % :focus (element-matches? :name "object" :color "red")))]]})
+```
+
+The first example is `pause-fn`. This works similarly to `information-fn` or `i#`, but instead of displaying the resulting value, the code checks whether the value is non-nil, and if it is, the model run pauses. In this example, the model run will pause any time the focus is on a red object.
+
+When using `pause-fn`, it is important to include a `display.controls` in your model, so that you have a way of unpausing afterwards.
+
+<br><br>
+
 <img src="images/display/Alternatives_1b.png" width="500">
 
 ```Clojure
@@ -454,9 +471,7 @@ As in the previous example, we use `:glyph-value` to specify what is to be displ
      0)]]})
 ```
 
-Thus far, our examples have relied heavily on information functions to specify elements, panels, glyphs, and some parameter values. However, there are variants and alternatives that can be used in the place of information functions. Like `i#`, these are defined in `arcadia.utility.display`.
-
-The first example is `remember-previous`, a function that wraps around an information function and indicates that the function should save the value it returns on each cycle and make that value available on the following cycle via the `:previous` key. `remember-previous` takes two arguments: the information function and an initial value, which is what `:previous` will be set to on the first cycle.
+The `remember-previous` function wraps around an information function and indicates that the function should save the value it returns on each cycle and make that value available on the following cycle via the `:previous` key. `remember-previous` takes two arguments: the information function and an initial value, which is what `:previous` will be set to on the first cycle.
 
 In this example, the information function counts the number of times that the focus of attention is a red object. On each cycle, it checks whether the current focus is a red object. If it is, then the information function increments the number currently stored in `:previous` and returns the result. If not, then the information function simply returns the number currently stored in `:previous`.
 
@@ -499,11 +514,9 @@ In this example, the display will show "Beginning model." initially. When the fi
   :panel-width 300
   :color                                                        ;;
   (nth-value                                                    ;;
-   [java.awt.Color/red java.awt.Color/green java.awt.Color/blue ;;
-    java.awt.Color/yellow java.awt.Color/orange                 ;;
-    java.awt.Color/magenta java.awt.Color/cyan]                 ;;
+   [:red :green :blue :yellow :orange :magenta :cyan]           ;;
    (i# (:cycle %))                                              ;;
-   java.awt.Color/black)                                        ;;
+   :black)                                                      ;;
   :elements
   [["Red Count"
     (remember-previous
@@ -538,8 +551,8 @@ This example shows us one more key that information functions can use, `:cycle`,
   :flatten-panels? true
   :header-background
   (map-to-panels
-   [java.awt.Color/red java.awt.Color/green
-    java.awt.Color/blue java.awt.Color/yellow])
+   [:red :green
+    :blue :yellow])
   :rows 2 :cols 2
   :element-type :image :image-width 120 :image-height 120
   :panels
@@ -605,7 +618,7 @@ Here we are using `display.objects`, which is preconfigured to display the initi
 (model/add
  display.objects
  {:x 50 :y 50
-  :panels                                                            ;;
+  :panels                                                                ;;
   [[(i# (-> % :content                                                   ;;
             (filter-elements :name "object" :world "working-memory")))]] ;;
   :elements
@@ -799,10 +812,9 @@ Whenever adding elements or panels to a display component, it's important to not
  display.scratchpad
  {:x 1100 :y 50
   :sensor (get-sensor :stable-viewpoint)}
- :display.second-scratchpad)   ;;
+ :display.second-scratchpad)                                       ;;
 
-(display/element-for :display.scratchpad focus)              ;;
-
+(display/element-for :display.scratchpad focus)                    ;;
 (display/element-for :display.second-scratchpad image-segmentation);;
 ```
 
@@ -820,12 +832,13 @@ The following table contains the full list of keys available for information fun
 |-|-|
 | :focus | Focus of attention |
 | :content | Accessible content |
+| :registry | ARCADIA's registry, which keeps track of the model's state |
 | :cycle | Cycle number |
 | :panel | Current display panel |
 | :element | Current display element |
 | :glyph | Current display glyph |
 | :image | Image displaying visual input (requires that the `:sensor` parameter be supplied) |
-| :image-hash | hash map of images displaying visual input (requires that the `:sensor-hash` parameter, a hash map of sensors, be supplied) |
+| :image-hash | Hash map of images displaying visual input (requires that the `:sensor-hash` parameter, a hash map of sensors, be supplied) |
 
 ### Parameters for Specifying Information
 
@@ -863,14 +876,14 @@ Note that these parameters also work for formatting textual glyphs that get draw
 
 | Element Parameter | Caption Parameter | Header Parameter | Description |
 |-|-|-|-|
-| :word-wrap? | :caption-word-wrap? | :header-word-wrap? | Use word wrap for text that doesn't fit on a line? |
+| :word-wrap? | :caption-word-wrap? | :header-word-wrap? | Use word wrap for text that doesn't fit on a line? (NOTE: Currently disabled.)|
 | :text-size | :caption-size | :header-text-size | Size of text, specified as a ratio to the default size. nil = 1.0 = the default size. |
 | :bold? | :caption-bold? | :header-bold? | Display text in bold? |
 | :italic? | :caption-italic? | :header-italic? | Display text in italic? |
 | :underline? | :caption-underline? | :header-underline? | Display text underlined? |
 | :strike-through? | :caption-strike-through? | :header-strike-through? | Display text with a line going through it? |
-| :color | :caption-color | :header-color | Color of text. Use a java.awt.Color object. nil = black. |
-| :background | :caption-background | :header-background | Background color of text. Use a java.awt.Color object. nil = no background. |
+| :color | :caption-color | :header-color | Color of text. Use a keyword (:red), a string ("blue"), or a vector [0 0 120]. nil = black. |
+| :background | :caption-background | :header-background | Background color of text. nil = no background. |
 | :font-family | :caption-font-family | :header-font-family | Font family of text. nil = use default font. |
 | :center? | :caption-center? | :header-center? | Should text be centered? Default is true for headers only. |
 | :indent | :caption-indent | :header-indent | Number of pixels by which text should be indented. |
@@ -886,6 +899,7 @@ The next table describes several parameters that provide additional formatting o
 | :precision | Round all numbers to this many digits after the decimal. 0 = turn all numbers into integers. This value can also be negative, for example -1 = round all numbers to the nearest tens digit. |
 | :excluded-keys | Any time a hash-map is displayed, remove this list of keys before displaying it. |
 | :pretty-points? | Any time data to be displayed looks like a point, for example {:x 143 :y 454} or [143 454], display it in parentheses with a comma, like (143, 454). Default is true. |
+| :display-fn | Provides a function that will be called on an element to produce the string that will actually be displayed. This is useful because it allows you to keep the element as a rich data structure, for example to make it visualizable via control-click, while displaying a simple, readable string. The display.status uses this to display the current focus's name. |
 | :simple-literal-color | If this is non-nil, then numbers, keywords, strings, nil, true, false, and empty collections will be displayed in the specified color. |
 | :keyword-color | If this is non-nil, then keywords will be displayed in the specified color. Overrides :simple-literal-color. |
 | :number-color | If this is non-nil, then numbers will be displayed in the specified color. Overrides :simple-literal-color. |
@@ -943,7 +957,7 @@ These parameters format glyphs. Note that many of the text formatting parameters
 | :glyph-scale | When glyphs are drawn, by default they are scaled according to the mapping between the canvas size and input sensor size (e.g., drawn at half size if the canvas is half as wide/tall as the input sensor). As an alternative, a scaling factor for the glyphs can be supplied here. |
 | :color | Color for glyphs. |
 | :fill-color | Fill color for glyphs. |
-| :alpha | Alpha value for glyphs. |
+| :alpha | Alpha channel for glyphs. Determines transparency. Ranges from 1.0 (fully opaque, the default value) to 0. |
 | :line-width | Line width for glyphs. |
 | :shape-scale | For glyphs that are rectangles, draw them at this multiple of the original shape. For example, if :shape-scale is 0.5, then draw the shape at half size. Default is 1. |
 | :shape | For glyphs that are rectangles, draw them as this shape. The default is :rectangle, but other options are :oval, :cross, and :x. |

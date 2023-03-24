@@ -90,14 +90,14 @@
 
   Relation arguments can either be ordered or unordered, but are
   always stored in a list to avoid problems with duplicate arguments."
-  ([instantiation-request object-descriptors source]
+  ([instantiation-request object-descriptors]
    (let [args (:arguments instantiation-request)]
      (map (fn [value] (relate (:relation args) value
                               (:justifications args) (:objects args)
                               (map #(d/get-descriptor % object-descriptors) (:objects args))
-                              (:context args) source))
+                              (:context args)))
           (:values args))))
-  ([relation value justifications arguments argument-descriptors context source]
+  ([relation value justifications arguments argument-descriptors context]
    (let [r {:name "relation"
             :arguments {:predicate-name (:predicate-name relation)
                         :ordered (:ordered relation)
@@ -112,7 +112,6 @@
                         :justifications justifications
                         :context context}
             :world nil
-            :source source
             :type "instance"}]
 
      ;; make sure that r is valid before returning it

@@ -1,11 +1,48 @@
 (ns
   ^{:doc "Utility functions for creating, traversing, and modifying Clojure objects"}
   arcadia.utility.general
-  (:import java.time.LocalDateTime)
-  (:require [clojure.walk :refer [postwalk]]
+  (:import java.time.LocalDateTime
+           java.text.DecimalFormat
+           java.math.RoundingMode)
+  (:require clojure.walk
             clojure.java.io
             [clojure.core.matrix.random :refer [sample-normal]]
+            [clojure.data.generators :as dgen]
             clojure.string))
+
+;; print queues as <-(contents)-< for readability
+;; this might not be great for interlingua elements
+(defmethod print-method clojure.lang.PersistentQueue [q w] 
+  (print-method '<- w)
+  (print-method (seq q) w)
+  (print-method '-< w))
+
+(defn append-queue [q coll]
+  (reduce conj q coll))
+
+(defn queue
+  ([] (clojure.lang.PersistentQueue/EMPTY))
+  ([coll]
+   (append-queue clojure.lang.PersistentQueue/EMPTY coll)))
+
+(defn type-string
+  "Returns a string naming the type of a data structure. Strips off any
+   class hierarchy information."
+  [item]
+  (when item
+    (->> item
+         type str
+         (re-matches #".*[.]([^.]*)")
+         second)))
+
+(defn self-type-string
+  "Similar to type-string, but can be called when item is already a type."
+  [item]
+  (when item
+    (->> item
+         str
+         (re-matches #".*[.]([^.]*)")
+         second)))
 
 (defn print-element
   "Prints an interlingua element's toplevel data, and a list of its argument keys.
@@ -13,12 +50,12 @@
   ([e]
    (println (list (:name e) (:type e) (:world e)
                   (sort (keys (:arguments e)))
-                  (type (:source e)))))
+                  (:source (meta e)))))
   ([prefix e]
    (println prefix
             (list (:name e) (:type e) (:world e)
                   (sort (keys (:arguments e)))
-                  (type (:source e))))))
+                  (:source (meta e))))))
 
 ;; https://dev.clojure.org/jira/browse/CLJ-2056
 ;; apparently will never be included in Clojure, but useful anyway.
@@ -43,7 +80,44 @@
   "Returns a random item from a list, or nil if the list is empty."
   [items]
   (when (seq items)
-    (rand-nth items)))
+    (dgen/rand-nth items)))
+
+
+;;  private double nextNextGaussian;
+;;  private boolean haveNextNextGaussian = false;
+
+;;  public double nextGaussian() {
+;;    if (haveNextNextGaussian) {
+;;      haveNextNextGaussian = false;
+;;      return nextNextGaussian;
+;;    } else {
+;;      double v1, v2, s;
+;;      do {
+;;        v1 = 2 * nextDouble() - 1;   // between -1.0 and 1.0
+;;        v2 = 2 * nextDouble() - 1;   // between -1.0 and 1.0
+;;        s = v1 * v1 + v2 * v2;
+;;      } while (s >= 1 || s == 0);
+;;      double multiplier = StrictMath.sqrt(-2 * StrictMath.log(s)/s);
+;;      nextNextGaussian = v2 * multiplier;
+;;      haveNextNextGaussian = true;
+;;      return v1 * multiplier;
+;;    }
+;;  }
+
+(defn next-gaussian 
+  "Returns a random floating point number from a Gaussian distribution with mean 0 and s.d. 1.
+   The implementation is based on the algorithm in java.util.Random and uses clojure.data.generator
+   to enable a seed."
+  []
+  (loop [v1 (- (* 2.0 (dgen/double)) 1.0)
+         v2 (- (* 2.0 (dgen/double)) 1.0)
+         s (+ (* v1 v1) (* v2 v2))]
+    (if (or (>= s 1.0) (zero? s))
+      (let [v1x (-  (* 2.0 (dgen/double)) 1.0) 
+            v2x (- (* 2.0 (dgen/double)) 1.0)
+            sx (+ (* v1x v1x) (* v2x v2x))]
+        (recur v1x v2x sx))
+      (* v1 (java.lang.StrictMath/sqrt (* -2.0 (/ (java.lang.StrictMath/log s) s)))))))
 
 (defn nested-merge
   "Merges two maps, recursively merging their values if they are also maps.
@@ -92,18 +166,25 @@
   ([map & keys]
    (if (empty? keys)
      map
-     (postwalk #(if (map? %)
-                  (apply dissoc (conj keys %))
-                  %) map))))
+     (clojure.walk/postwalk #(if (map? %)
+                               (apply dissoc (conj keys %))
+                               %) map))))
 
 ;;Taken from https://clojuredocs.org/clojure.core/when-let
+;; (defmacro when-let*
+;;   "Similar to when-let, but supports multiple bindings, executing the body when
+;;   all bindings evaluate to true."
+;;   [bindings & body]
+;;   `(let ~bindings
+;;      (when (and ~@(take-nth 2 bindings))
+;;        (do ~@body))))
+
 (defmacro when-let*
-  "Similar to when-let, but supports multiple bindings, executing the body when
-  all bindings evaluate to true."
-  [bindings & body]
-  `(let ~bindings
-     (when (and ~@(take-nth 2 bindings))
-       (do ~@body))))
+  ([bindings & body]
+   (if (seq bindings)
+     `(when-let [~(first bindings) ~(second bindings)]
+        (when-let* ~(drop 2 bindings) ~@body))
+     `(do ~@body))))
 
 (defn approx=
   "Tests whether e1 and e2 are equal, ignoring any values
@@ -255,6 +336,38 @@
   values."
   [s f1 f2] (zipmap (map f1 s) (map f2 s)))
 
+(defn careful-walk
+  "Variant of clojure.walk/walk that has been updated to avoid turning PersistentQueue
+   into a sequence. Traverses form, an arbitrary data structure.  inner and outer are
+   functions.  Applies inner to each element of form, building up a data structure of 
+   the same type, then applies outer to the result. Recognizes all Clojure data structures. 
+   Consumes seqs as with doall."
+  [inner outer form]
+  (cond
+    (and (list? form) (not (instance? clojure.lang.PersistentQueue form))) 
+    (outer (apply list (map inner form)))
+    (instance? clojure.lang.IMapEntry form)
+    (outer (clojure.lang.MapEntry/create (inner (key form)) (inner (val form))))
+    (seq? form) (outer (doall (map inner form)))
+    (instance? clojure.lang.IRecord form)
+    (outer (reduce (fn [r x] (conj r (inner x))) form form))
+    (coll? form) (outer (into (empty form) (map inner form)))
+    :else (outer form)))
+
+(defn careful-postwalk
+  "Variant of clojure.walk/walk that has been updated to avoid turning PersistentQueue
+   into a sequence. Performs a depth-first, post-order traversal of form.  Calls f on
+   each sub-form, uses f's return value in place of the original. Recognizes all Clojure 
+   data structures. Consumes seqs as with doall."
+  [f form]
+  (careful-walk (partial careful-postwalk f) f form))
+
+(defn careful-prewalk
+  "Variant of clojure.walk/walk that has been updated to avoid turning PersistentQueue
+   into a sequence. Like careful-postwalk, but does pre-order traversal."
+  [f form]
+  (careful-walk (partial careful-prewalk f) identity (f form)))
+
 (defn data-str
   "Returns a string representing a seq, with sep in between each element
    and end at the end. By default sep = \" \" and end = \"\\n\"
@@ -263,6 +376,58 @@
   ([coll] (data-str coll " " "\n"))
   ([coll sep] (data-str coll sep "\n"))
   ([coll sep end] (str (apply str (interpose sep coll)) end)))
+
+(defn flatten-str
+  "Takes one or more arguments and flattens them before applying str to them."
+  [& args]
+  (apply str (flatten args)))
+
+(defn format-number
+  "Takes a number and the desired max number of digits after the decimal and formats
+   the number so that it will have at most that many digits. Precision can be
+   negative, e.g., -1 means round to the nearest tens, -2 means round to the
+   nearest hundreds, etc. If num is a string, then attempt to format any
+   numbers within that string.
+   Always returns a string.
+   If the keyword argument preserve-type? is true, then if the number is a float,
+   output it with a single digit after the decimal point, even if that digit is
+   0.
+   If the keyword argument min-characters is non-nil, then add leading spaces to 
+   the number if its formatting length has fewer characters than min-characters."
+  [num precision & {:keys [preserve-type? min-characters]}]
+  (cond
+    (nil? precision)
+    (str num)
+
+    (string? num)
+    (cond->
+     (clojure.string/replace
+      num #"(?<![0-9\.])(([1-9][0-9]*)|0)\.[0-9]+(?![0-9]|\.[0-9])" ;;Find all doubles
+      #(-> % first Double/valueOf
+           (format-number precision :preserve-type? preserve-type? :min-characters min-characters)))
+      
+      (or (neg? precision) min-characters)
+      (clojure.string/replace
+       #"(?<![0-9\.])(([1-9][0-9]*)|0)(?![0-9]|\.[0-9])" ;;Find all integers
+       #(-> % first Integer/valueOf
+            (format-number precision :preserve-type? preserve-type? :min-characters min-characters))))
+
+    (or (Double/isNaN num) (Double/isInfinite num))
+    (str num)
+
+    :else
+    (-> num double Double/toString (BigDecimal.)
+        (.setScale precision RoundingMode/HALF_UP) (.doubleValue)
+        (->> (.format (DecimalFormat.
+                       (flatten-str "#" (when (pos? precision) ".")
+                                    (repeat precision "#")))))
+        (cond->
+         (and preserve-type? (float? num))
+          ((fn [s] (if (not (.contains s "."))
+                     (str s ".0")
+                     s)))
+          min-characters
+          (->> (format (str "%1$" min-characters "s")))))))
 
 (defn ranged
   "Make a range of doubles from fractions. This partially
@@ -363,16 +528,6 @@
     (format "%d-%02d-%02d_%02d-%02d-%02d" (.getYear time) (.getMonthValue time) (.getDayOfMonth time)
             (.getHour time) (.getMinute time) (.getSecond time))))
 
-(defn type-string
-  "Returns a string naming the type of a data structure. Strips off any
-   class hierarchy information."
-  [item]
-  (when item
-    (->> item
-         type str
-         (re-matches #".*[.]([^.]*)")
-         second)))
-
 (defn make-directories-for-path
   "Ensures that the necessary directories for a file path are created, if they
   don't exist already."
@@ -414,21 +569,15 @@
         (println "Creating file:" filename)
         (spit filename
               (format "(ns arcadia.component.%s
+  \"Focus Responsive
+                       
+    Default Behavior
+                       
+    Produces\"
   (:require [arcadia.component.core :refer [Component merge-parameters]]))
 
-;;
-;;
-;; Focus Responsive
-;;
-;;
-;; Default Behavior
-;;
-;;
-;; Produces
-;;
-;;
-
-(defrecord %s [buffer parameters] Component
+(defrecord %s [buffer parameters] 
+  Component
   (receive-focus
    [component focus content])
   (deliver-result

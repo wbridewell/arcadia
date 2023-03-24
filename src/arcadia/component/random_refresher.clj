@@ -15,28 +15,28 @@
 
 (def ^:parameter retrieval-threshold 0.0)
 
-(defn- refresh [element source]
+(defn- refresh [element]
   {:name "refresh"
    :arguments {:element element
                :reason "random"}
    :world nil
-   :type "action"
-   :source source})
+   :type "action"})
 
-(defrecord RandomRefresher [buffer retrieval-threshold] Component
+(defrecord RandomRefresher [buffer retrieval-threshold]
+  Component
   (receive-focus
-   [component focus content]
+    [component focus content]
 
    ;; refresh a random element in WM
-   (if-let [rand (g/rand-if-any (filter #(and (= (:world %) "working-memory")
-                                              (some-> % meta :activation (>= retrieval-threshold)))
-                                        content))]
-     (reset! (:buffer component) (refresh rand component))
-     (reset! (:buffer component) nil)))
+    (if-let [rand (g/rand-if-any (filter #(and (= (:world %) "working-memory")
+                                               (some-> % meta :activation (>= retrieval-threshold)))
+                                         content))]
+      (reset! (:buffer component) (refresh rand))
+      (reset! (:buffer component) nil)))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method RandomRefresher [comp ^java.io.Writer w]
   (.write w (format "RandomRefresher{}")))

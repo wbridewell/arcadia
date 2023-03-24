@@ -8,7 +8,6 @@
   [e1 e2 descriptors]
   (and (= (:name e1) (:name e2) "event-stream")
        (= (:world e1) (:world e2))
-       (= (:source e1) (:source e2))
        (= (:event-name (:arguments e1)) (:event-name (:arguments e2)))
        ;; all of the objects are the same (use labels to avoid identity mistakes)
        (and (-> e1 :arguments :objects some?)
@@ -44,7 +43,6 @@
   [event component content]
   (let [e (merge event {:name "event-stream"
                         :type "instance"
-                        :source component
                         :world "episodic-memory"})
         ;; find the start age of any equal event in episodic-memory,
         ;; using 0 if none exist

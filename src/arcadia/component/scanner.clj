@@ -2,7 +2,7 @@
   "TODO: add documentation"
   (:require [arcadia.component.core :refer [Component merge-parameters]]
             [arcadia.sensor.stable-viewpoint :as sensor]
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             (arcadia.utility [scan :refer [scan-context extrapolate-loc obj-velocity time-to-collision]]
                              [objects :as obj]
                              [vectors :as vec]
@@ -58,8 +58,8 @@
   [intersect targ-region {:keys [dimension pixel-radius]}]
   (let [[min-val max-val val]
         (if (= dimension "horizontal")
-          [(reg/min-y targ-region) (reg/max-y targ-region) (second intersect)]
-          [(reg/min-x targ-region) (reg/max-x targ-region) (first intersect)])]
+          [(geo/min-y targ-region) (geo/max-y targ-region) (second intersect)]
+          [(geo/min-x targ-region) (geo/max-x targ-region) (first intersect)])]
     (println :score-intersect :intersect val :min min-val :max max-val :radius pixel-radius intersect)
     ;;Either the intersect is between min and max val, it's below min-val, or it's
     ;;above max-val. Calculate the the percentage of the space for each.
@@ -84,7 +84,7 @@
   ;; if the target is moving, score the intersect using its location roughly at the time of impact
   [intersect trace {:keys [start target dimension radius]}]
   ;(println :SCORE-INTERSECT intersect dimension (time-to-collision start intersect))
-  (- 1.0 (g/epsilon (reg/distance intersect
+  (- 1.0 (g/epsilon (geo/distance intersect
                                   (extrapolate-loc target (time-to-collision start intersect) trace dimension))
                     (+ (-> start :arguments :region :radius)
                        (-> target :arguments :region :radius)))))
@@ -93,24 +93,22 @@
 
 (defn- make-scan
   "Create a new interlingua representing the ongoing process of a visual scan."
-  [source arguments]
+  [arguments]
   {:name "scan"
    :arguments (assoc arguments :ongoing? true)
    :world nil
-   :source source
    :type "action"})
 
 (defn- make-intersect
   "Create a new interlingua representing the intersection of the scan path
   and either the target, or a screen edge."
-  [source intersection score arguments]
+  [intersection score arguments]
   {:name "scan-intersection"
    :arguments (assoc (dissoc arguments :ongoing?)
                      :intersection intersection
                      :score score
                      :ttc (time-to-collision (:start arguments) intersection))
    :world nil
-   :source source
    :type "relation"})
 
 
@@ -167,10 +165,10 @@
   (vec/+ [x0 y0] (vec/scalar* (vec/- [x1 y1] [x0 y0])
                                  ;; transformed collision point's percent distance
                                  ;; along the transformed velocity vector
-                                 (/ (vec/distance [x0 y0]
+                              (/ (vec/distance [x0 y0]
                                       ;; collision point in transformed space
-                                      (vec/- p (vec/resize vel (Math/sqrt (max 0 (- (* r-dist r-dist) (vec/norm-sq dist)))))))
-                                    (vec/norm vel)))))
+                                               (vec/- p (vec/resize vel (Math/sqrt (max 0 (- (* r-dist r-dist) (vec/norm-sq dist)))))))
+                                 (vec/norm vel)))))
 
 
 (defn- trace-intersect
@@ -190,7 +188,7 @@
 
     :else
     (let [;; extrapolate the target to where it should be around this time
-          new-target-loc (extrapolate-loc (reg/center target-reg) (obj-velocity target trace)
+          new-target-loc (extrapolate-loc (geo/center target-reg) (obj-velocity target trace)
                                           (time-to-collision start [x-prev y-prev]) trace dimension)
 
           ;; start and target collide if their closest distance is smaller than their summed radii
@@ -272,11 +270,11 @@
   If targ-rect is nil, set the bound to -1"
   [targ-rect {:keys [dimension x-vel y-vel]}]
   (if (nil? targ-rect) -1
-    (cond
-      (and (= dimension "horizontal") (pos? x-vel)) (reg/min-x targ-rect)
-      (= dimension "horizontal") (reg/max-x targ-rect)
-      (pos? y-vel) (reg/min-y targ-rect)
-      :else (reg/max-y targ-rect))))
+      (cond
+        (and (= dimension "horizontal") (pos? x-vel)) (geo/min-x targ-rect)
+        (= dimension "horizontal") (geo/max-x targ-rect)
+        (pos? y-vel) (geo/min-y targ-rect)
+        :else (geo/max-y targ-rect))))
 
 (defn- find-target
   "If target is nil, the scan must continue until it hits someting.
@@ -285,11 +283,11 @@
   (let [r (obj/get-region scan content)]
     (some->> (obj/get-vstm-objects content)
              (remove #{start})
-             (filter #(or (reg/intersect? r (obj/get-region % content))
-                          (reg/contains? r (obj/get-region % content))))
+             (filter #(or (geo/intersect? r (obj/get-region % content))
+                          (geo/contains? r (obj/get-region % content))))
              seq
-             (apply min-key #(reg/sq-distance (reg/center r)
-                                              (reg/center (obj/get-region % content)))))))
+             (apply min-key #(geo/sq-distance (geo/center r)
+                                              (geo/center (obj/get-region % content)))))))
 
 ;;Given an existing scan, move x and y forward by the amounts specified in x-vel
 ;;and y-vel.  Then, check if we're now intersecting the appropriate bound of our
@@ -297,7 +295,7 @@
 ;;we are that our intersection was along the target (and not above or below it, e.g., if this
 ;;was a horizontal scan as indicated by dimension = "horizontal"). If we aren't, then put out a "scan"
 ;;with :ongoing? set to true. If this continues to receive attention, we'll continue scanning.
-(defn- update-scan [source scan content sensor parameters]
+(defn- update-scan [scan content sensor parameters]
   (let [;; project the start's velocity one more step, taking wall bounces into account
         [x1 x-vel] (project (:x (:arguments scan)) (:x-vel (:arguments scan))
                             (-> scan :arguments :start :arguments :region :radius)
@@ -342,19 +340,19 @@
     (list (cond
             ;; continue scanning on if there's no intersection
             (nil? intersect)
-            (make-scan source new-args)
+            (make-scan  new-args)
 
             ;; if the scan is moving in the wrong direction or not moving at all on the
             ;; appropriate axis, score the nil "intersect" as 0.0 (it will never happen)
             (= intersect TERMINATE-SCAN)
-            (make-intersect source nil 0.0 new-args)
+            (make-intersect nil 0.0 new-args)
 
             :else
-            (make-intersect source intersect
-              (if target-trace
-                (score-trace-intersect intersect target-trace new-args)
-                (score-intersect intersect targ-reg new-args))
-              new-args))
+            (make-intersect intersect
+                            (if target-trace
+                              (score-trace-intersect intersect target-trace new-args)
+                              (score-intersect intersect targ-reg new-args))
+                            new-args))
 
           ;; if there's an object in the way, output a scan intersection for it
           (when (and (:track-interceptors? new-args)
@@ -362,35 +360,36 @@
             (let [interceptor (find-target (:start new-args) scan content)
                   interceptor-reg (when interceptor (obj/get-estimated-region interceptor content))
                   interceptor-intersect (and interceptor
-                                             (reg/not= targ-reg interceptor-reg)
+                                             (geo/not= targ-reg interceptor-reg)
                                              (intersect (bound interceptor-reg new-args)
                                                         (sensor/camera-width sensor) (sensor/camera-height sensor)
                                                         new-args))]
               (when (and interceptor-intersect (not= interceptor-intersect TERMINATE-SCAN))
                 ;; NOTE: throw away the relation and context of the scan, because the
                 ;; interception represents a different possibility than the one we're looking for
-                (make-intersect source interceptor-intersect
+                (make-intersect interceptor-intersect
                                 (score-intersect interceptor-intersect interceptor-reg new-args)
                                 (assoc new-args :target interceptor :relation nil :context nil))))))))
 
 
-(defrecord Scanner [buffer scan-queue sensor parameters] Component
+(defrecord Scanner [buffer scan-queue sensor parameters]
+  Component
   (receive-focus
-   [component focus content]
-   (reset! (:buffer component)
-           (when (= (:name focus) "scan")
-             (update-scan component focus content (:sensor component) (:parameters component))))
+    [component focus content]
+    (reset! (:buffer component)
+            (when (= (:name focus) "scan")
+              (update-scan focus content (:sensor component) (:parameters component))))
 
-   (reset! (:scan-queue component)
-           (when (= (:name focus) "scan")
-             (gaze/update-delay-queue focus "old-scan" @(:scan-queue component))))
+    (reset! (:scan-queue component)
+            (when (= (:name focus) "scan")
+              (gaze/update-delay-queue focus "old-scan" @(:scan-queue component))))
 
-   (doall (map #(->> % :arguments :score (println :scanner-score))
-               (filter (comp :score :arguments) @(:buffer component)))))
+    (doall (map #(->> % :arguments :score (println :scanner-score))
+                (filter (comp :score :arguments) @(:buffer component)))))
   (deliver-result
-   [component]
-   (set (conj @(:buffer component)
-              (gaze/delay-queue-output @(:scan-queue component))))))
+    [component]
+    (into () (conj @(:buffer component)
+                   (gaze/delay-queue-output @(:scan-queue component))))))
 
 (defmethod print-method Scanner [comp ^java.io.Writer w]
   (.write w (format "Scanner{}")))

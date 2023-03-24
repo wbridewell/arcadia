@@ -112,11 +112,11 @@ For components that take parameters, add the merge-parameters symbol. A few comp
     ```Clojure
       ; :buffer contains a seqeuence of elements
       (deliver-result [component]
-        (set @(:buffer component))))
+        @buffer))
       
       ; :buffer contains a single element
       (deliver-result [component]
-        #{@(:buffer component)}))
+        (list @buffer)))
     ```
 **Other required functions:**
 

@@ -44,36 +44,36 @@
                                         (:dir (:arguments new)))
               dir-change-threshold))))
 
-(defn heading-change-event [obj component]
+(defn heading-change-event [obj]
   {:name "event"
    :arguments {:event-name "heading-change"
                :objects (list obj)}
    :type "instance"
-   :source component
    :world nil})
 
-(defrecord HeadingChangeReporter [buffer motion-history] Component
+(defrecord HeadingChangeReporter [buffer motion-history]
+  Component
   (receive-focus
-   [component focus content]
-   (reset! (:buffer component) nil)
-   (let [motions (filter #(and (= (:name %) "event-stream")
-                               (= (:event-name (:arguments %)) "motion"))
-                         content)]
-     (doall (map #(when-let [new (updated-motion % motions content)]
-                    (when (heading-changed? % new)
-                      (println "------------------------------------------CHANGE IN HEADING-------------------------"
-                               (-> new get-motion-obj :arguments :color)
-                               (-> % :arguments ((juxt :x-dir :y-dir :dir))) (-> new :arguments ((juxt :x-dir :y-dir :dir))))
-                      (swap! (:buffer component) conj
-                             (heading-change-event (get-motion-obj new) component))))
-                 @(:motion-history component)))
+    [component focus content]
+    (reset! (:buffer component) nil)
+    (let [motions (filter #(and (= (:name %) "event-stream")
+                                (= (:event-name (:arguments %)) "motion"))
+                          content)]
+      (doall (map #(when-let [new (updated-motion % motions content)]
+                     (when (heading-changed? % new)
+                       (println "------------------------------------------CHANGE IN HEADING-------------------------"
+                                (-> new get-motion-obj :arguments :color)
+                                (-> % :arguments ((juxt :x-dir :y-dir :dir))) (-> new :arguments ((juxt :x-dir :y-dir :dir))))
+                       (swap! (:buffer component) conj
+                              (heading-change-event (get-motion-obj new)))))
+                  @(:motion-history component)))
 
      ;; update the history of motion events for the next cycle
-     (reset! (:motion-history component) motions)))
+      (reset! (:motion-history component) motions)))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method HeadingChangeReporter [comp ^java.io.Writer w]
   (.write w (format "HeadingChangeReporter{}")))

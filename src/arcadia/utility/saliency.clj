@@ -1,5 +1,6 @@
 (ns
-  ^{ :doc "An implementation of Itti, Koch, and Niebur's approach to visual saliency."}
+  ^{:author "Will Bridewell"
+    :doc "An implementation of Itti, Koch, and Niebur's approach to visual saliency."}
   arcadia.utility.saliency
   (:require [clojure.math.numeric-tower :as math]
             [arcadia.utility.image-array :as image-array]

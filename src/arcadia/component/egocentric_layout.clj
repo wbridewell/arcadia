@@ -42,12 +42,12 @@
   Component
   (receive-focus
     [component focus content]
-    (reset! buffer (spatial-map (egocentrize (d/first-element content :name "image-segmentation")) 
+    (reset! buffer (spatial-map (egocentrize (d/first-element content :name "image-segmentation"))
                                 component)))
 
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method EgocentricLayout [comp ^java.io.Writer w]
   (.write w (format "EgocentricLayout{}")))

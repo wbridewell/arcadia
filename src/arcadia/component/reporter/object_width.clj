@@ -26,12 +26,11 @@
 ;; be replaced with one that producers either a "gist" or an "object-property"
 ;; element.
 
-(defn- make-width [segment width source]
+(defn- make-width [segment width]
   {:name "object-width"
    :arguments {:width width :segment segment}
    :world nil
-   :type "instance"
-   :source source})
+   :type "instance"})
 
 (defrecord ObjectWidthReporter [buffer]
   Component
@@ -42,12 +41,12 @@
                           (= (:world focus) nil) ;; direct perception only
                           (obj/get-segment focus content))]
       (reset! (:buffer component)
-              (make-width segment (-> segment :region :width) component))
+              (make-width segment (-> segment :region :width)))
       (reset! (:buffer component) nil)))
 
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method ObjectWidthReporter [comp ^java.io.Writer w]
   (.write w (format "ObjectWidthReporter{}")))

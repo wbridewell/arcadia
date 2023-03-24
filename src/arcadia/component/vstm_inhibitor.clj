@@ -17,47 +17,46 @@
 
   mode: exclude - inhibit regions that exclude the point
         include - inhibit regions that include the point"
-  (:require [arcadia.vision.regions :as reg]
+  (:require [arcadia.utility.geometry :as geo]
             [arcadia.component.core :refer [Component]]))
 
-(defn make-inhibition [location component]
+(defn make-inhibition [location]
   {:name "fixation-inhibition"
    :arguments {:region location
                :mode "include"
                :reason "VSTM"}
 
    :world nil
-   :source component
    :type "instance"})
 
 (defn- oldest-objects [objects]
     ;(println "vstm_inhibitor objects -> " (mapv #(:arguments %) objects))
-    (let [sorted-objects (sort-by #(:timestamp (:arguments %)) > objects)]
+  (let [sorted-objects (sort-by #(:timestamp (:arguments %)) > objects)]
 
-        (if (>= (count sorted-objects) 4) (rest sorted-objects) sorted-objects)))
+    (if (>= (count sorted-objects) 4) (rest sorted-objects) sorted-objects)))
 
 (defrecord VSTMInhibitor [buffer]
   Component
   (receive-focus
-   [component focus content]
+    [component focus content]
 
-   (let [objects (filter #(and (= (:name %) "object")
-                              (= (:world %) "vstm")) content)
-         oldest-objects (oldest-objects objects)
+    (let [objects (filter #(and (= (:name %) "object")
+                                (= (:world %) "vstm")) content)
+          oldest-objects (oldest-objects objects)
          ;locations (map #(:region (:arguments (get-location % content))) oldest-objects)
          ;locations (map #(:region (:arguments (get-location % content))) objects)
-         locations (map #(-> % :arguments :region reg/center) objects)
-         inhibitions (map #(make-inhibition % component)
-                          (filter some? locations))]
+          locations (map #(-> % :arguments :region geo/center) objects)
+          inhibitions (map #(make-inhibition %)
+                           (filter some? locations))]
 
-     (println "locations = " locations)
-     (println "vstm inhibitions = " (map #(:arguments %) inhibitions))
+      (println "locations = " locations)
+      (println "vstm inhibitions = " (map #(:arguments %) inhibitions))
      ;(reset! buffer inhibitions))
-     (reset! (:buffer component) inhibitions)))
+      (reset! (:buffer component) inhibitions)))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method VSTMInhibitor [comp ^java.io.Writer w]
   (.write w (format "VSTMInhibitor{}")))

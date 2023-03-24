@@ -1,6 +1,6 @@
 (ns
-  ^{:doc
-    "Provides an environment for processing a video or image, which might correspond
+ ^{:doc
+   "Provides an environment for processing a video or image, which might correspond
      to one trial of an experiment. The stimulus runs until a video ends, a max
      number of environmental actions are taken, or a max number of cycles is reached,
      and the environment generates messages and data describing the actions taken.
@@ -9,7 +9,7 @@
      for example adding some number of :buffer-frames (blank images) at the beginning
      of the stimulus or specifying that all actions should be ignored until
      :minimum-cycles-before-action have passed."}
-  arcadia.simulator.environment.stimulus-player
+ arcadia.simulator.environment.stimulus-player
   (:import javax.swing.JFrame)
   (:require
    [arcadia.simulator.environment.core :refer [Environment info step render reset close]]
@@ -48,10 +48,12 @@
 (def ^:parameter skip-frames "Skip this many frames at the beginning of each video"
   0)
 
+(def ^:parameter py-camera? "Should the environment include a python camera?" false)
+
 (defn- make-blank-display
   "Produces a display that is simply a black rectangle."
   [width height]
-  (cv/zeros [width height] cv/CV_8UC3))
+  (cv/zeros {:width width :height height} cv/CV_8UC3))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Code for accessing and working with environment information
@@ -124,7 +126,7 @@
                                    (range 1 (+ 1 num-responses)))
           :else nil)]
     (zipmap (cons :cycles
-                    response-headers)
+                  response-headers)
             (cons counter responses))))
 
 (defn- initiate-sub-environment
@@ -159,84 +161,84 @@
   Environment
 
   (info [env]
-        {:dimensions [:height :width]
-         :height (state-val env :height)
-         :width (state-val env :width)
-         :viewing-width (:viewing-width params)
-         :increment (:increment params)
-         :render-modes ["human" "buffered-image"]
-         :finished? (state-val env :finished?)
-         :file-path (:file-path params)
-         :actions :any})
+    {:dimensions [:height :width]
+     :height (state-val env :height)
+     :width (state-val env :width)
+     :viewing-width (:viewing-width params)
+     :increment (:increment params)
+     :render-modes ["human" "buffered-image"]
+     :finished? (state-val env :finished?)
+     :file-path (:file-path params)
+     :actions :any})
 
   ;; Take a step through the environment. The exact behavior of taking a step
   ;; will vary, depending on the sub environment (are we processing a static
   ;; image or a video?).
   (step [env actions]
-        (update-state! env :buffer-count (inc (state-val env :buffer-count)))
-        (update-state! env :cycle (inc (state-val env :cycle)))
+    (update-state! env :buffer-count (inc (state-val env :buffer-count)))
+    (update-state! env :cycle (inc (state-val env :cycle)))
 
         ;;If we aren't finished or in the pre-stimulus buffer, process the next
         ;;frame of the stimulus.
-        (if (and (not (state-val env :finished?))
-                 (> (state-val env :buffer-count) (:buffer-frames params)))
-          (let [advanced? (subenv-method env step actions)
-                new-action
-                (when (and (seq actions) (number? (:max-actions params))
-                           (pos? (:max-actions params))
-                           (or (nil? (:minimum-cycles-before-action params))
-                               (>= (state-val env :cycle)
-                                   (:minimum-cycles-before-action params))))
-                  (first actions))]
+    (if (and (not (state-val env :finished?))
+             (> (state-val env :buffer-count) (:buffer-frames params)))
+      (let [advanced? (subenv-method env step actions)
+            new-action
+            (when (and (seq actions) (number? (:max-actions params))
+                       (pos? (:max-actions params))
+                       (or (nil? (:minimum-cycles-before-action params))
+                           (>= (state-val env :cycle)
+                               (:minimum-cycles-before-action params))))
+              (first actions))]
 
             ;;If there were any environmental actions on this cycle, save one.
-            (when new-action
-              (update-state! env :actions (conj (state-val env :actions)
-                                                new-action)))
+        (when new-action
+          (update-state! env :actions (conj (state-val env :actions)
+                                            new-action)))
 
             ;;If we're done with the stimulus, because we've
             ;;exceeded the max actions, we've exceeded the max cycles, or the
             ;;stimulus failed to progress (i.e., the video ended), then submit
             ;;the appropriate data and message.
-            (if (or (and new-action
-                         (>= (count (state-val env :actions))
-                             (:max-actions params)))
-                    (and (:max-cycles params)
-                         (> (state-val env :cycle) (:max-cycles params)))
-                    (not (or advanced? (:replay-final-video-frame? params))))
-              (let [data (prepare-data env params)]
+        (if (or (and new-action
+                     (>= (count (state-val env :actions))
+                         (:max-actions params)))
+                (and (:max-cycles params)
+                     (> (state-val env :cycle) (:max-cycles params)))
+                (not (or advanced? (:replay-final-video-frame? params))))
+          (let [data (prepare-data env params)]
 
-                (update-state! env :finished? true)
-                (assoc (get-message env new-action true) :done? true :data data))
-              (assoc (get-message env new-action false) :done? false)))
-          {:done? (state-val env :finished?)}))
+            (update-state! env :finished? true)
+            (assoc (get-message env new-action true) :done? true :data data))
+          (assoc (get-message env new-action false) :done? false)))
+      {:done? (state-val env :finished?)}))
 
   (reset [env] ;;Not quite correct at present
-         (subenv-method env reset))
+    (subenv-method env reset))
 
   ;; Draw for human consumption or get a Java BufferedImage.
   ;; render returns its results in key-value pairs
   (render [env mode close]
-          (case mode
-            "human"
-            (img/display-image! (if @jframe @jframe
-                                    (reset! jframe (JFrame. "MultiStimuli Environment")))
-                                (get-current-image env params))
+    (case mode
+      "human"
+      (img/display-image! (if @jframe @jframe
+                              (reset! jframe (JFrame. "MultiStimuli Environment")))
+                          (get-current-image env params))
 
-            "buffered-image"
-            (update (get-current-image env params) :image img/mat-to-bufferedimage)
+      "buffered-image"
+      (update (get-current-image env params) :image img/mat-to-bufferedimage)
 
-            "opencv-matrix"
-            (get-current-image env params)
+      "opencv-matrix"
+      (get-current-image env params)
 
-            "numpy-array"
-            (subenv-method env render "numpy-array" false)
+      "numpy-array"
+      (subenv-method env render "numpy-array" false)
 
-            "gpu-matrix"
-            (subenv-method env render "gpu-matrix" false)))
+      "gpu-matrix"
+      (subenv-method env render "gpu-matrix" false)))
 
   (close [env]
-         (subenv-method env close))
+    (subenv-method env close))
 
   ;; no randomness
   (seed [env seed-value] nil))

@@ -20,11 +20,10 @@
 
 (def ^:parameter vstm-size "number of elements in vSTM" 4)
 
-(defn- generate-enumeration [number component]
+(defn- generate-enumeration [number]
   {:name "vstm-enumeration"
    :arguments {:count number}
    :world nil
-   :source component
    :type "instance"})
 
 (defn- potential-objects [content]
@@ -39,12 +38,12 @@
       (if (and (> nobjects 0)
                (>= nobjects
                    (min vstm-size (count (potential-objects content)))))
-        (reset! (:buffer component) (generate-enumeration nobjects component))
+        (reset! (:buffer component) (generate-enumeration nobjects))
         (reset! (:buffer component) nil))))
 
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method VSTMEnumeratorSimple [comp ^java.io.Writer w]
   (.write w (format "VSTMEnumeratorSimple{}")))

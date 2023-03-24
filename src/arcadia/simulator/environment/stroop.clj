@@ -90,16 +90,16 @@
    :remaining-trials n-trials})
 
 (defn- congruent-stimulus []
-  (let [idx (rand-int (count colors))]
+  (let [idx (dgen/uniform 0 (count colors))]
     {:color (get colors idx) :word (get words idx)}))
 
 (defn- incongruent-stimulus []
-  (let [idx (rand-int (count colors))]
+  (let [idx (dgen/uniform 0 (count colors))]
     {:color (get colors idx)
-     :word (rand-nth (seq (difference (into #{} words) #{(get words idx)})))}))
+     :word (dgen/rand-nth (seq (difference (into #{} words) #{(get words idx)})))}))
 
 (defn- neutral-stimulus []
-  (let [idx (rand-int (count colors))]
+  (let [idx (dgen/uniform 0 (count colors))]
     {:color (get colors idx) :word neutral-word}))
 
 ;; don't worry about proportionality concerns for now

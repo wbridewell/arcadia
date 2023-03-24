@@ -2,71 +2,68 @@
   "TODO"
   (:require [arcadia.component.core :refer [Component]]
             [arcadia.utility.descriptors :as d]
-            [arcadia.utility.minigrid :as mg]))
+            [arcadia.utility.minigrid :as mg]
+            [clojure.data.generators :as dgen]))
 
-(defn- make-action [id source]
+(defn- make-action [id]
   (when id
     {:name "minigrid-action"
      :arguments {:action-command id}
      :world nil
-     :source source
      :type "action"}))
 
 
-(defn- generate-behavior [adjacency-info]
-  (let [forward (:front adjacency-info)
-        ontop (:on adjacency-info)
-        left (:left adjacency-info)
-        right (:right adjacency-info)]
-    (cond
-      (= (:category ontop) "goal")
-      (mg/action-value "done")
+(defn- generate-behavior [{:keys [front left right]} previous-info]
+  (cond
+    (and (= (:state left) "closed") (= (:category left) "door"))
+    (mg/action-value "left")
 
-      (= (:category forward) "goal")
-      (mg/action-value "done")
+    (and (= (:state right) "closed") (= (:category right) "door"))
+    (mg/action-value "right")
 
-      (= (:category left) "goal")
-      (mg/action-value "left")
+    (and (= (:state front) "open") (= (:category front) "door"))
+    (mg/action-value "forward")
 
-      (= (:category right) "goal")
-      (mg/action-value "right")
+    (and (= (:state front) "closed") (= (:category front) "door"))
+    (mg/action-value "toggle")
 
-      (= (:category forward) "key")
-      (mg/action-value "pickup")
+    (and (= (:state left) "open") (= (:category left) "door"))
+    (mg/action-value "left")
 
-      (and (= (:state left) "closed") (= (:category left) "door"))
-      (mg/action-value "left")
+    (and (= (:state right) "open") (= (:category right) "door"))
+    (mg/action-value "right")
 
-      (and (= (:state right) "closed") (= (:category right) "door"))
-      (mg/action-value "right")
+    ;; if you get to the end of an impassable space, then
+    ;; turn around and go back.
+    (every? #{"wall" "door" "lava" "key"}
+            [(:category (:left previous-info)) (:category left) (:category front)])
+    (mg/action-value "right")
 
-      (and (= (:state forward) "open") (= (:category forward) "door"))
-      (mg/action-value "forward")
+    (every? #{"wall" "door" "lava" "key"}
+            [(:category (:right previous-info)) (:category right) (:category front)])
+    (mg/action-value "left")
 
-      (and (= (:state forward) "closed") (= (:category forward) "door"))
-      (mg/action-value "toggle")
+    ;; sometimes it's fine to be random
+    (or (#{"wall" "lava" "key"} (:category front))
+        (and (= (:category front) "door") (= (:state front) "locked")))
+    (dgen/rand-nth [(mg/action-value "right") (mg/action-value "left")])
 
-      (and (= (:state left) "open") (= (:category left) "door"))
-      (mg/action-value "left")
+      ;; the next two conditions will force exploration of hallways or newly open spaces.
+    ;; (and (= (:category (:left previous-info)) "wall")
+    ;;      (= (:category left) "empty"))
+    ;; (mg/action-value "left")
 
-      (and (= (:state right) "open") (= (:category right) "door"))
-      (mg/action-value "right")
+    ;; (and (= (:category (:right previous-info)) "wall")
+    ;;      (= (:category right) "empty"))
+    ;; (mg/action-value "right")
 
-      (and (= (:category forward) "door") (= (:state forward) "locked")
-           (= (:category ontop) "key") (= (:color ontop) (:color forward)))
-      (mg/action-value "toggle")
+    (#{"empty"} (:category front))
+    (mg/action-value "forward")
 
-      (or (#{"wall" "lava"} (:category forward))
-          (and (= (:category forward) "door") (= (:state forward) "locked")))
-      (rand-nth [(mg/action-value "right") (mg/action-value "left") (mg/action-value "right")])
+    :else
+    nil))
 
-      (#{"empty"} (:category forward))
-      (mg/action-value "forward")
-
-      :else
-      nil)))
-
-(defrecord MinigridWallfollower [buffer forward?]
+(defrecord MinigridWallfollower [buffer memory]
   Component
   (receive-focus
     [component focus content]
@@ -75,17 +72,18 @@
    ;; action in process, so wait for it to complete before requesting a new action
     (if (or (d/element-matches? focus :type "action" :name "minigrid-action" :world nil)
             (d/first-element content :type "environment-action" :name "minigrid-env-action"))
-      (reset! (:buffer component) nil)
+      (reset! buffer nil)
       (when-let [mg-perception (d/first-element content :name "minigrid-perception")]
-        (reset! (:buffer component)
-                (make-action (generate-behavior (-> mg-perception :arguments :adjacency-info)) component)))))
+        (reset! buffer
+                (make-action (generate-behavior (-> mg-perception :arguments :adjacency-info) @memory)))
+        (reset! memory (-> mg-perception :arguments :adjacency-info)))))
 
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method MinigridWallfollower [comp ^java.io.Writer w]
   (.write w (format "MinigridWallfollower{}")))
 
 (defn start []
-  (->MinigridWallfollower (atom nil) (atom false)))
+  (->MinigridWallfollower (atom nil) (atom nil)))

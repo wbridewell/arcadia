@@ -43,51 +43,36 @@
 (defrecord ColorSemantics [buffer parameters enhancement]
   Component
   (receive-focus
-   [component focus content]
+    [component focus content]
    ;; start over with a new task
-   (when (d/element-matches? focus :name "switch-task")
-     (reset! (:enhancement component) 0))
-   (when-let [new-parameters (:arguments (d/first-element content
-                                                          :name "update-color-semantics"
-                                                          :type "automation" :world nil))]
-     (when (contains? new-parameters :enhancement)
-       (reset! (:enhancement component) (-> new-parameters :enhancement))))
+    (when (d/element-matches? focus :name "switch-task")
+      (reset! (:enhancement component) 0))
+    (when-let [new-parameters (:arguments (d/first-element content
+                                                           :name "update-color-semantics"
+                                                           :type "automation" :world nil))]
+      (when (contains? new-parameters :enhancement)
+        (reset! (:enhancement component) (-> new-parameters :enhancement))))
 
-   (reset! (:buffer component) nil)
-   (let [img (cond (d/element-matches? focus :name "object" :world nil) (-> focus :arguments :image)
-                   (d/element-matches? focus :name "fixation" :world nil) (-> focus :arguments :segment :image))
-         mask (cond (d/element-matches? focus :name "object" :world nil) (-> focus :arguments :mask)
-                    (d/element-matches? focus :name "fixation" :world nil) (-> focus :arguments :segment :mask))]
+    (reset! (:buffer component) nil)
+    (let [img (cond (d/element-matches? focus :name "object" :world nil) (-> focus :arguments :image)
+                    (d/element-matches? focus :name "fixation" :world nil) (-> focus :arguments :segment :image))
+          mask (cond (d/element-matches? focus :name "object" :world nil) (-> focus :arguments :mask)
+                     (d/element-matches? focus :name "fixation" :world nil) (-> focus :arguments :segment :mask))]
 
-     (when-let  [color (and img (get-color img mask 0.5))]
-       (reset! (:buffer component)
-               {:name "semantics"
-                :arguments {:property :color
-                            :color color
-                            :strength (+ (-> component :parameters :base-strength)
-                                         @(:enhancement component))
-                            :path :color}
-                :source component
-                :type "instance"
-                :world nil}))))
-   
-
-  ;;  (when (and (d/element-matches? focus :name "object" :world nil)
-  ;;             (get-color focus 0.5))
-  ;;    (reset! (:buffer component)
-  ;;            {:name "semantics"
-  ;;             :arguments {:property :color
-  ;;                         :color (get-color focus 0.5)
-  ;;                         :strength (+ (-> component :parameters :base-strength)
-  ;;                                      @(:enhancement component))
-  ;;                         :path :color}
-  ;;             :source component
-  ;;             :type "instance"
-  ;;             :world nil})))
+      (when-let  [color (and img (get-color img mask 0.5))]
+        (reset! (:buffer component)
+                {:name "semantics"
+                 :arguments {:property :color
+                             :color color
+                             :strength (+ (-> component :parameters :base-strength)
+                                          @(:enhancement component))
+                             :path :color}
+                 :type "instance"
+                 :world nil}))))
 
   (deliver-result
     [component]
-   #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method ColorSemantics [comp ^java.io.Writer w]
   (.write w (format "ColorSemantics{}")))

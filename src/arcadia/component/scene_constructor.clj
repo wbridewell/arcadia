@@ -26,7 +26,7 @@
   
   (deliver-result
    [component]
-   (set @(:buffer component))))
+   @buffer))
 
 (defmethod print-method SceneConstructor [comp ^java.io.Writer w]
   (.write w (format "SceneConstructor{}")))

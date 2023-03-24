@@ -24,7 +24,8 @@
   which suggests that up to 4 salient objects are presented for potential
   visual fixation."
   (:require [arcadia.component.core :refer [Component merge-parameters]]
-            [arcadia.utility [general :as g] [opencv :as cv]]))
+            [arcadia.utility [general :as g] [opencv :as cv]]
+            [clojure.data.generators :as dgen]))
 
 (def ^:parameter ^:required map-sensor
   "a sensor used to generate a saliency map from visual input (required)"
@@ -45,7 +46,6 @@
                  :reason reason
                  :most-salient? (= reason "saliency")}
      :world nil
-     :source component
      :type "instance"}))
 
 (defn- segment-saliency
@@ -61,7 +61,7 @@
   ;; tuple = [weight, item]
   ;; tuples are sorted by weight in > order
   ;; return [selected-item rest]
-  (loop [mass (rand (apply + (map first tuples)))
+  (loop [mass (* (dgen/double) (apply + (map first tuples)))
          elements tuples
          answer nil]
     (if (or (neg? mass) (empty? elements))
@@ -73,28 +73,28 @@
 (defrecord SaliencyHighlighter [map-sensor segment-sensor buffer]
   Component
   (receive-focus
-   [component focus content]
-   (let [saliency-map (g/find-first #(and (= (:name %) "saliency-map")
-                                          (= (-> % :arguments :sensor)
-                                             (:map-sensor component)))
-                                    content)
-         segments (g/find-first #(and (= (:name %) "image-segmentation")
-                                      (= (-> % :arguments :sensor)
-                                         (:segment-sensor component)))
-                                content)]
-     (if (and saliency-map segments)
-       (reset! (:buffer component)
-               (weighted-choice
-                (take set-size
-                      (sort-by first >
-                               (map (fn [x] [(segment-saliency (-> saliency-map :arguments :image-mat) x) x])
-                                    (-> segments :arguments :segments))))))
-       (reset! (:buffer component) nil))))
+    [component focus content]
+    (let [saliency-map (g/find-first #(and (= (:name %) "saliency-map")
+                                           (= (-> % :arguments :sensor)
+                                              (:map-sensor component)))
+                                     content)
+          segments (g/find-first #(and (= (:name %) "image-segmentation")
+                                       (= (-> % :arguments :sensor)
+                                          (:segment-sensor component)))
+                                 content)]
+      (if (and saliency-map segments)
+        (reset! (:buffer component)
+                (weighted-choice
+                 (take set-size
+                       (sort-by first >
+                                (map (fn [x] [(segment-saliency (-> saliency-map :arguments :image-mat) x) x])
+                                     (-> segments :arguments :segments))))))
+        (reset! (:buffer component) nil))))
 
   (deliver-result
     [component]
     (when (seq (remove #(or (nil? %) (empty? %)) @(:buffer component)))
-      (into #{}
+      (into ()
             (conj (map #(make-fixation % "scene" component) (second @(:buffer component)))
                   (make-fixation (first @(:buffer component)) "saliency" component))))))
 
@@ -104,4 +104,4 @@
 (defn start
   [& {:as args}]
   (let [p (merge-parameters args)]
-   (->SaliencyHighlighter (:map-sensor p) (:segment-sensor p) (atom nil))))
+    (->SaliencyHighlighter (:map-sensor p) (:segment-sensor p) (atom nil))))

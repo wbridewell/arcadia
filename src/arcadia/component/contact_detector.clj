@@ -14,7 +14,7 @@
   Produces
     * event, with an :event-name of \"contact\" and :objects that are in contact"
   (:require [arcadia.component.core :refer [Component merge-parameters]]
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             [arcadia.utility [general :as g] [objects :as obj]]))
 
 (def ^:parameter contact-threshold
@@ -42,7 +42,7 @@
   [o1 o2 max-contact-distance content]
   (let [r1 (obj/get-estimated-region o1 content)
         r2 (obj/get-estimated-region o2 content)
-        dist (reg/distance (obj/get-region o1 content) (obj/get-region o2 content))]
+        dist (geo/distance (obj/get-region o1 content) (obj/get-region o2 content))]
     (when (and (< dist max-contact-distance)
                (not= r1 r2))
       dist)))
@@ -83,8 +83,8 @@
         (reset! (:buffer component) nil))))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method ContactDetector [comp ^java.io.Writer w]
   (.write w (format "ContactDetector{}")))

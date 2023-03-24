@@ -1,5 +1,6 @@
-Task Representations
+Task Representations 
 ===
+(NOTE: Task representations as described below still work, but they have been superceded by task sets, task-set schemas, and prospective memory. This is an active area of research and is expected to change more in the near future. 20MAR2023))
 
 The library `arcadia.utility.tasks` contains functions for creating and firing SR-links, creating tasks, and creating subvocalization requests. The function task constructs a new task schema from from four values: a task handle, an attentional strategy, and a sequence of SR-links, and a completion condition, which is a descriptor. Task schemata are instantiated using the information encoded in a task hierarchy.
 

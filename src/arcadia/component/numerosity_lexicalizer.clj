@@ -23,113 +23,101 @@
   Displays
   n/a"
   (:require [arcadia.component.core :refer [Component]]
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             [arcadia.utility [objects :as obj]]))
 
 
 (def number-words ["zero","one","two","three","four","five","six","seven","eight","nine","ten","eleven","twelve","thirteen","fourteen",
                    "fifteen","sixteen","seventeen","eightteen","nineteen","twenty"])
 
-(defn lexicalize-numerosity [number source]
+(defn lexicalize-numerosity [number]
   {:name "lexicalized-number"
    :arguments {:lexeme (nth number-words number) :number number}
    :type "instance"
-   :world nil
-   :source source})
+   :world nil})
 
 (def min-area 50)
 (def max-area 10000)
 
 (defn- task-object?
   ([obj descriptors]
-   (let [seg-area (-> obj :arguments :region reg/area)
+   (let [seg-area (-> obj :arguments :region geo/area)
          shape-desc (:shape-description (:arguments obj))
          size-desc (:size-description (:arguments obj))]
 
-        (if (empty? descriptors) true
-             (and (some #(= shape-desc %) descriptors)
+     (if (empty? descriptors) true
+         (and (some #(= shape-desc %) descriptors)
               (some #(= size-desc %) descriptors)))))
   ([obj]
    (task-object? obj [])))
 
 (defn- mask-segment? [seg]
-  (> (-> seg :region reg/area) 100000))
+  (> (-> seg :region geo/area) 100000))
 
 (defn get-numerosity [lex-num]
   (.indexOf number-words (:lexeme (:arguments lex-num))))
 
-
-(defn numerosity [lex-num source]
+(defn numerosity [lex-num]
   {:name "number"
    :arguments {:usage "counter" :value (get-numerosity lex-num) :update-on "change"}
    :type "instance"
-   :world nil
-   :source source})
-
+   :world nil})
 
 (defn- sweep-complete? [content]
   (let [sweep-chunk (first (filter #(= (:name %) "sweep-position") content))
         fixations (filter #(= (:name %) "fixation") content)]
-
-    (println "sweep-complete? value: " (:value (:arguments sweep-chunk)))
-        ;(println "sweep-complete? value: " (:value sweep-chunk))
     (cond
-
       (and (:value (:arguments sweep-chunk)) (seq fixations))
-      (empty? (filter #(> (:x (reg/center (:region (:segment (:arguments %))))) (:value (:arguments sweep-chunk))) fixations))
+      (empty? (filter #(> (:x (geo/center (:region (:segment (:arguments %))))) (:value (:arguments sweep-chunk))) fixations))
 
       :else
       false)))
 
-
-
-
-
 (defrecord NumerosityLexicalizer [buffer]
   Component
   (receive-focus
-   [component focus content]
-   (let [current-lex-num (first (filter #(and (= (:name %) "lexeme")
-                                            (= (:world %) "phonological-buffer")) content))
-         fixation-count (count (filter #(= (:name %) "fixation") content))
-         inhibition-count (count (filter #(= (:name %) "fixation-inhibition") content))
-         mask-segment? (some #(mask-segment? %) (obj/get-segments-persistant content))
-         sweep-complete? (sweep-complete? content)
-         enumeration-subset (first (filter #(= (:name %) "enumeration-subset") content))
-         descriptors (if enumeration-subset (:descriptors (:arguments enumeration-subset)) [])
-         ans (first (filter #(= (:name %) "number-sense") content))
-         report (first (filter #(= (:name %) "number-report") content))]
-    (cond
+    [component focus content]
+    (let [current-lex-num (first (filter #(and (= (:name %) "lexeme")
+                                               (= (:world %) "phonological-buffer")) content))
+          fixation-count (count (filter #(= (:name %) "fixation") content))
+          inhibition-count (count (filter #(= (:name %) "fixation-inhibition") content))
+          mask-segment? (some #(mask-segment? %) (obj/get-segments-persistant content))
+          sweep-complete? (sweep-complete? content)
+          enumeration-subset (first (filter #(= (:name %) "enumeration-subset") content))
+          descriptors (if enumeration-subset (:descriptors (:arguments enumeration-subset)) [])
+          ans (first (filter #(= (:name %) "number-sense") content))
+          report (first (filter #(= (:name %) "number-report") content))]
+      (cond
 
-          (or (= "number-report" (:name focus)) (and (= (:name focus) "memorize") (= (:name (:element (:arguments focus))) "number-report")))
-          (reset! (:buffer component) nil)
+        (or (= "number-report" (:name focus)) (and (= (:name focus) "memorize") (= (:name (:element (:arguments focus))) "number-report")))
+        (reset! (:buffer component) nil)
 
           ;; start lexical count based on subitized numerosity
-          (and (= (:name focus) "vstm-enumeration") (not mask-segment?)
+        (and (= (:name focus) "vstm-enumeration") (not mask-segment?)
              (= (:type focus) "instance")
              ;; highly specialized component
              (:count (:arguments focus)))
-          (reset! (:buffer component) (lexicalize-numerosity (:count (:arguments focus)) component))
+        (reset! (:buffer component) (lexicalize-numerosity (:count (:arguments focus))))
 
            ;; if lexical count begun - prime next number
-          (and (not (nil? current-lex-num)) (= (:name focus) "object") (task-object? focus descriptors) (< (get-numerosity current-lex-num) fixation-count))
-          (reset! (:buffer component) (lexicalize-numerosity (inc (get-numerosity current-lex-num)) component))
+        (and (not (nil? current-lex-num)) (= (:name focus) "object") (task-object? focus descriptors) (< (get-numerosity current-lex-num) fixation-count))
+        (reset! (:buffer component) (lexicalize-numerosity (inc (get-numerosity current-lex-num))))
 
-          (and (not (nil? ans)) (not (nil? report)))
-          (reset! (:buffer component) (lexicalize-numerosity (:value (:arguments report)) component))
+        (and (not (nil? ans)) (not (nil? report)))
+        (reset! (:buffer component) (lexicalize-numerosity (:value (:arguments report))))
 
-          (and mask-segment? (not (nil? report)))
-          (reset! (:buffer component) (lexicalize-numerosity (:value (:arguments report)) component))
+        (and mask-segment? (not (nil? report)))
+        (reset! (:buffer component) (lexicalize-numerosity (:value (:arguments report))))
 
-          (and sweep-complete? current-lex-num)
-          (reset! (:buffer component) (numerosity current-lex-num component))
+        (and sweep-complete? current-lex-num)
+        (reset! (:buffer component) (numerosity current-lex-num))
 
-          :else
-          (reset! (:buffer component) nil))))
+        :else
+        (reset! (:buffer component) nil))))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method NumerosityLexicalizer [comp ^java.io.Writer w]
   (.write w (format "NumerosityLexicalizer{}")))

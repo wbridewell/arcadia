@@ -30,13 +30,12 @@
      (reset! (:buffer component) 
              {:name "vocalize"
               :arguments (merge (:arguments focus) {:action-command (color-action (-> focus :arguments :lexeme))})
-              :source component
               :type "environment-action"})
      (reset! (:buffer component) nil)))
    
   (deliver-result
    [component]
-   #{@(:buffer component)}))
+   (list @buffer)))
 
 (defmethod print-method StroopArticulator [comp ^java.io.Writer w]
   (.write w (format "StroopArticulator{}")))

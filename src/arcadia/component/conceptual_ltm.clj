@@ -24,7 +24,7 @@
    (update element :arguments
            (fn [m]
              (into {} (filter #((some-fn string? symbol? keyword?) (val %)) m))))
-   :source :world))
+   :world))
 
 ;; return a version of the element where any arguments that are objects have been
 ;; conceptualized and a sequence of those conceptualized elements that can be 
@@ -60,9 +60,9 @@
     (update (conceptualize element) :arguments #(merge % objects))))
 
 (defn- recall-element
-  [x component]
+  [x]
   (when x
-    (assoc x :source component :world "memory")))
+    (assoc x :world "memory")))
 
 ;; Store objects and relations among objects
 ;; Objects will be stripped of their non-symbolic arguments
@@ -74,34 +74,33 @@
   Component
 
   (receive-focus
-   [component focus content]
-   (reset! (:buffer component) nil)
-   (cond
+    [component focus content]
+    (reset! (:buffer component) nil)
+    (cond
      ;; do we retrieve all elements or an arbitrary matching one?
-     (d/element-matches? focus :name "memory-retrieval" :type "action" :world nil)
-     (when-let [query (-> focus :arguments :descriptor)]
-       (reset! (:buffer component)
-               (recall-element
-                (d/rand-match query (seq @(:database component)))
-                component)))
+      (d/element-matches? focus :name "memory-retrieval" :type "action" :world nil)
+      (when-let [query (-> focus :arguments :descriptor)]
+        (reset! (:buffer component)
+                (recall-element
+                 (d/rand-match query (seq @(:database component))))))
 
      ;; store an object in LTM when it is explicitly stored in working memory.
-     (d/element-matches? focus :name "memorize" :type "action" :world nil
-                         :element #(d/element-matches? % :name "object"))
+      (d/element-matches? focus :name "memorize" :type "action" :world nil
+                          :element #(d/element-matches? % :name "object"))
       ;; store a simplified representation of the object
-     (record-objects! (:database component) (-> focus :arguments :element))
+      (record-objects! (:database component) (-> focus :arguments :element))
 
      ;; store an element in LTM when it is explicitly stored in working memory.
      ;; this is useful for storing relations.
-     (d/element-matches? focus :name "memorize" :type "action" :world nil)
+      (d/element-matches? focus :name "memorize" :type "action" :world nil)
       ;; store a simplified representation of the object
-     (doto (:database component)
-       (record-objects! (-> focus :arguments :element))
-       (swap! conj (replace-objects (-> focus :arguments :element))))))
-     
+      (doto (:database component)
+        (record-objects! (-> focus :arguments :element))
+        (swap! conj (replace-objects (-> focus :arguments :element))))))
+  
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method ConceptualLTM [comp ^java.io.Writer w]
   (.write w (format "ConceptualLTM{}")))

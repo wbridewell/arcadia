@@ -20,7 +20,7 @@
   (:require [arcadia.component.core :refer [Component merge-parameters]]
             [arcadia.sensor.core :refer [poll]]
             [arcadia.utility [general :as g]]
-            [arcadia.vision.regions :as reg]))
+            [arcadia.utility.geometry :as geo]))
 
 (def ^:parameter ^:required sensor "a sensor that provides visual input (required)" nil)
 
@@ -30,17 +30,15 @@
                :sensor (:sensor component)
                :reason "task"}
    :world nil
-   :source component
    :type "instance"})
-
 
 (defn- segment-at-point
   "Get the smallest segment that contains the specified location."
   [x y segments]
   ;; prefer smaller segments that contain the point.
-  (g/find-first (fn [s] (reg/contains? (:region s) {:x x :y y}))
-                (sort-by (fn [s] (* (reg/width (:region s))
-                                    (reg/height (:region s))))
+  (g/find-first (fn [s] (geo/contains? (:region s) {:x x :y y}))
+                (sort-by (fn [s] (* (geo/width (:region s))
+                                    (geo/height (:region s))))
                          <
                          segments)))
 
@@ -53,19 +51,19 @@
 (defrecord CenterHighlighter [sensor buffer]
   Component
   (receive-focus
-   [component focus content]
-   (let [current-segments (:segments
+    [component focus content]
+    (let [current-segments (:segments
                             (:arguments
-                              (g/find-first #(and (= (:name %) "image-segmentation")
-                                                  (= (:sensor (:arguments %))
-                                                     (:sensor component)))
-                                          content)))]
-     (reset! (:buffer component) (get-center-segment current-segments (:sensor component)))))
+                             (g/find-first #(and (= (:name %) "image-segmentation")
+                                                 (= (:sensor (:arguments %))
+                                                    (:sensor component)))
+                                           content)))]
+      (reset! (:buffer component) (get-center-segment current-segments (:sensor component)))))
 
   (deliver-result
-   [component]
-   (when @(:buffer component)
-     #{(make-fixation @(:buffer component) component)})))
+    [component]
+    (when @buffer
+      (list (make-fixation @buffer component)))))
 
 (defmethod print-method CenterHighlighter [comp ^java.io.Writer w]
   (.write w (format "CenterHighlighter{}")))

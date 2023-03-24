@@ -32,32 +32,31 @@
 
 (def ^:private weber-fraction 0.13)
 
-(defn number-sense [mean source]
+(defn number-sense [mean]
   {:name "number-sense"
    :arguments {:mean mean :weberfrac weber-fraction}
    :type "instance"
-   :world nil
-   :source source})
+   :world nil})
 
 (defrecord AutomaticNumberSensor [buffer]
   Component
   (receive-focus
-   [component focus content]
+    [component focus content]
    ;; assumes all changes are task relevant
-   (let [fixations (filter #(= (:name %) "fixation") content)
-         number (first (filter #(= (:name %) "number") content))
-         old-ans (first (filter #(= (:name %) "number-sense") content))]
-        (cond
-            (= (:name focus) "group-fixation")
-            (do (println (count (:segments (:arguments focus))))
-             (reset! (:buffer component) (number-sense (count (:segments (:arguments focus))) component)))
+    (let [fixations (filter #(= (:name %) "fixation") content)
+          number (first (filter #(= (:name %) "number") content))
+          old-ans (first (filter #(= (:name %) "number-sense") content))]
+      (cond
+        (= (:name focus) "group-fixation")
+        (do (println (count (:segments (:arguments focus))))
+            (reset! (:buffer component) (number-sense (count (:segments (:arguments focus))))))
 
-            :else
-            (reset! (:buffer component) nil))))
+        :else
+        (reset! (:buffer component) nil))))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method AutomaticNumberSensor [comp ^java.io.Writer w]
   (.write w (format "AutomaticNumberSensor{}")))

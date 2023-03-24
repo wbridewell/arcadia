@@ -1,7 +1,7 @@
 (ns ^{:doc "Utility functions for creating and matching descriptors for interlingua elements.
 Descriptors are analogous to regular expressions for interlingua elements.
 An interlingua element is a Clojure map including :name, :arguments,
-:type, :source, and :world keys, where the :arguments value is another Clojure map.
+:type, and :world keys, where the :arguments value is another Clojure map.
 
 A descriptor is a similar Clojure map where each value is a test against
 the corresponding value of an interlingua element, taking the form of either
@@ -31,7 +31,7 @@ number of interlingua elements to be matched.
 
 ;; A descriptor's toplevel keys are the same as an interlingua element's,
 ;; but can also include a :label which applies to any matching element
-(def ^:private toplevel-keys [:name :type :world :source :label])
+(def ^:private toplevel-keys [:name :type :world :label])
 
 ;;-------------------------------Making Descriptors-------------------------------
 (defn descriptor
@@ -64,7 +64,7 @@ number of interlingua elements to be matched.
   "Given an element and a descriptor, returns true if
   the element has the same name and all of the arguments
   of the element match the descriptor arguments."
-  [descriptor element]
+  [descriptor element] 
   (and (every? #(property-matches? (% descriptor) (% element))
                (keys (dissoc descriptor :label :arguments))) ;; exclude label from matching
        (or (empty? (:arguments descriptor))

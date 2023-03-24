@@ -1,8 +1,9 @@
 (ns
-  ^{ :doc "Functions for working with possible relations in working memory."}
+  ^{:author "Andrew Lovett"
+    :doc "Functions for working with possible relations in working memory."}
   arcadia.utility.possible-relations
   (:require [arcadia.utility.objects :refer [get-region]]
-            [arcadia.vision.regions :as reg]))
+            [arcadia.utility.geometry :as geo]))
 
 (defn make-possible-relation
   "Extracts the key information for a possible relation to be stored in WM."
@@ -71,7 +72,7 @@
         max-x (:max-x descriptor)
         min-y (:min-y descriptor)
         max-y (:max-y descriptor)
-        {x :x y :y} (reg/center (get-region object content))
+        {x :x y :y} (geo/center (get-region object content))
 
         descriptor (dissoc descriptor :min-x :max-x :min-y :max-y)]
     (and (map-subset? descriptor (:arguments object))

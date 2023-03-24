@@ -19,28 +19,27 @@
   (:require [arcadia.component.core :refer [Component]]))
 
 ;; NOTE: For now, buffer only holds one element -- TODO: improve this
-(defn retain-lexical-item [lexeme source]
+(defn retain-lexical-item [lexeme]
   {:name "lexeme"
    :arguments {:lexeme lexeme}
    :world "phonological-buffer"
-   :source source
    :type "instance"})
 
 (defrecord PhonologicalBuffer [buffer]
   Component
   (receive-focus
-   [component focus content]
-   (cond (and (= (:name focus) "vocalize")
-              (= (:type focus) "action"))
+    [component focus content]
+    (cond (and (= (:name focus) "vocalize")
+               (= (:type focus) "action"))
 
-         (reset! (:buffer component) [(retain-lexical-item (:lexeme (:arguments focus)) component)])
+          (reset! (:buffer component) [(retain-lexical-item (:lexeme (:arguments focus)))])
 
-         (and (= (:name focus) "memorize") (= (:name (:element (:arguments focus))) "number-report"))
-         (reset! (:buffer component) [])))
+          (and (= (:name focus) "memorize") (= (:name (:element (:arguments focus))) "number-report"))
+          (reset! (:buffer component) [])))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method PhonologicalBuffer [comp ^java.io.Writer w]
   (.write w (format "PhonologicalBuffer{}")))

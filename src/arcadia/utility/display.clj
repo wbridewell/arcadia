@@ -43,6 +43,15 @@
       (str "src/" (clojure.core/-> (subs classname 0 ind) (clojure.string/replace "." "/"))
            filename ".clj:" (.getLineNumber elem)))))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Clear out java windows
+
+(defn clear
+  "Clear out all java windows"
+  []
+  (doseq [w (java.awt.Window/getWindows)] (.dispose w)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Functions for displaying debugging information at runtime
 
@@ -233,11 +242,11 @@
                            {:caught? true :original e#})))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Functions for providing information to debug display components
+;;; Functions for providing information to display components
 
 (defmacro information-fn
   "This macro should be used in place of #() to define an anonymous information
-  function. Information functions are used by debug components to extract
+  function. Information functions are used by display components to extract
   information from ARCADIA's state. They are always single-arity functions that
   take a hash-map of the form {:focus focus, :content content, :element element},
   where element refers to an element that's already been extracted by another
@@ -257,6 +266,13 @@
 (def #^{:macro true} i#
   "shorthand for information-fn macro"
   #'information-fn)
+
+(defmacro pause-fn 
+  "This macro is a variant of the information-fn. Instead of displaying the results 
+   of the defined function on each cycle, the system will check whether the results 
+   are non-nil, and if they are, then the model will pause."
+  [body]
+  `(vary-meta (information-fn ~body) assoc :pause-function? true :information-function? false))
 
 (defn map-to-panels
   "Specifies a list of parameter values that should be mapped to a list of panels
@@ -326,6 +342,14 @@
   []
   `(with-meta ["Pause Button"]
               (assoc ~(meta &form) :pause-button? true :ns ~*ns* :file ~*file*)))
+
+(defmacro blank-canvas 
+  "Indicates an element that will be displayed visually as a blank canvas with the specified color.
+   A color might be :red, \"green\", or [0 0 255]. This is primarily useful for providing
+   a space onto which glyphs can be drawn."
+  [color]
+  `(with-meta {:color ~color}
+     ~(assoc (meta &form) :blank-canvas? true :ns *ns* :file *file*)))
 
 (defn information-fn?
   "Returns true if element is an information function."

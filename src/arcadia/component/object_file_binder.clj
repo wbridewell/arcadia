@@ -54,7 +54,7 @@
   [fixation object content]
   (or (-> object :arguments :slot)
       (-> (d/first-element (obj/get-latest-locations content)
-                         :region (-> fixation :arguments :segment :region))
+                           :region (-> fixation :arguments :segment :region))
           :arguments :slot)
       :unallocated))
 
@@ -69,23 +69,22 @@
 (defrecord ObjectFileBinder [buffer]
   Component
   (receive-focus
-   [component focus content]
-   (reset! (:buffer component) nil)
-   (when (d/element-matches? focus :name "fixation")
-     (let [object (-> focus :arguments :object (obj/updated-object content))]
-       (when-let [segment (obj/get-segment (or object focus) content)]
-         (reset! (:buffer component)
-                 (assoc (compose-object segment
-                                        (assign-slot focus object content)
-                                        (concat (filter #(and (= (:world focus) (:world %))
-                                                              (= (obj/get-region % content) (:region segment)))
-                                                        content)
-                                                (list focus)))
-                        :world (:world focus)
-                        :source component))))))
+    [component focus content]
+    (reset! (:buffer component) nil)
+    (when (d/element-matches? focus :name "fixation")
+      (let [object (-> focus :arguments :object (obj/updated-object content))]
+        (when-let [segment (obj/get-segment (or object focus) content)]
+          (reset! (:buffer component)
+                  (assoc (compose-object segment
+                                         (assign-slot focus object content)
+                                         (concat (filter #(and (= (:world focus) (:world %))
+                                                               (= (obj/get-region % content) (:region segment)))
+                                                         content)
+                                                 (list focus)))
+                         :world (:world focus)))))))
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method ObjectFileBinder [comp ^java.io.Writer w]
   (.write w (format "ObjectFileBinder{}")))

@@ -2,12 +2,12 @@
   (:import (net.sourceforge.tess4j Tesseract ITessAPI$TessPageIteratorLevel))
   (:require [clojure.string :as s]
             [clojure.java.io]
-            [arcadia.utility 
-             [image :as img] 
+            [arcadia.utility
+             [image :as img]
              [opencv :as cv]]
             [arcadia.component.core :refer [Component merge-parameters]]
             [arcadia.sensor.core :refer [poll]]
-            [arcadia.vision [regions :as reg]]))
+            [arcadia.utility.geometry :as geo]))
 
 (def ^:parameter ^:required sensor "a sensor that provides visual input (required)" nil)
 (def ^:parameter segment-type "Segment by :word, :line, :sentence, or :block. Default is :block."
@@ -37,7 +37,7 @@
 
 (defn- merge-segments
   [seg1 seg2]
-  {:region (reg/union (:region seg1) (:region seg2))
+  {:region (geo/union (:region seg1) (:region seg2))
    :text (str (:text seg1) " " (:text seg2))})
 
 (defn partition-after
@@ -84,19 +84,18 @@
                  :image img
                  :sensor (:sensor component)}
      :type "instance"
-     :world nil
-     :source component}))
+     :world nil}))
 
 (defrecord OCRSegmenter [sensor ocr buffer parameters]
   Component
   (receive-focus
-   [component focus content]
-   (when-let [img (-> (poll (:sensor component)) :image)]
-     (reset! (:buffer component) (get-segments img ocr content component parameters))))
+    [component focus content]
+    (when-let [img (-> (poll (:sensor component)) :image)]
+      (reset! (:buffer component) (get-segments img ocr content component parameters))))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method OCRSegmenter [comp ^java.io.Writer w]
   (.write w (format "OCRSegmenter{}")))

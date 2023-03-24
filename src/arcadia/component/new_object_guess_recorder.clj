@@ -29,7 +29,8 @@
          objects."
   (:require [arcadia.sensor.stable-viewpoint :as sensor]
             [arcadia.component.core :refer [Component merge-parameters]]
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
+            [clojure.data.generators :as dgen]
             (arcadia.utility [descriptors :as d]
                              [objects :as obj])))
 
@@ -58,7 +59,7 @@
       1   2
       4   3"
   [object content width height]
-  (let [{x :x y :y} (reg/center (obj/get-region object content))]
+  (let [{x :x y :y} (geo/center (obj/get-region object content))]
     (cond
       (and (< x (/ width 2)) (< y (/ height 2)))
       1
@@ -80,7 +81,7 @@
                                     objects)]
     (if (empty? untracked-same-quad)
       [false 0.0]
-      [(> (rand) 0.5) 0.5])))
+      [(> (dgen/double) 0.5) 0.5])))
 
 (defn- complex-quad-guess
   "If an object was lost in the same quadrant as the new object, then
@@ -102,10 +103,10 @@
       [false 0.0]
 
       (zero? (count tracked)) ;;We've lost everything, so we don't know.
-      [(> (rand) 0.5) 0.5]
+      [(> (dgen/double) 0.5) 0.5]
 
       :else  ;;We've lost some things, so probably this isn't a tracked object.
-      [(> (rand) 0.66) 0.33])))
+      [(> (dgen/double) 0.66) 0.33])))
 
 (defn- generate-guess
   "If necessary, guess whether the object was a target. Available guessing
@@ -130,32 +131,30 @@
     [false 0.0]))
 
 (defn- make-guess
-  [source new-object old-object index content params]
+  [new-object old-object index content params]
   (let [objects (obj/get-vstm-objects content)
         [old? probability]
         (generate-guess new-object old-object (:guess-mode params) objects
                         content (:width params) (:height params))]
-   {:name "new-object-guess"
-    :arguments {:old? old?
-                :probability probability
-                :index index
-                :tracked
-                (count (filter #(and (not (obj/same-region? new-object % content))
-                                     (-> % :arguments :tracked?))
-                               objects))
-                :untracked
-                (count (filter #(not (-> % :arguments :tracked?)) objects))}
-    :world nil
-    :type "event"
-    :source source}))
+    {:name "new-object-guess"
+     :arguments {:old? old?
+                 :probability probability
+                 :index index
+                 :tracked
+                 (count (filter #(and (not (obj/same-region? new-object % content))
+                                      (-> % :arguments :tracked?))
+                                objects))
+                 :untracked
+                 (count (filter #(not (-> % :arguments :tracked?)) objects))}
+     :world nil
+     :type "event"}))
 
 (defn- push-button
-  [source guess]
+  [guess]
   {:name "push-button"
    :arguments {:button-id (if (-> guess :arguments :old?)
                             "old" "new")}
    :world nil
-   :source source
    :type "action"})
 
 (defrecord NewObjectGuessRecorder [buffer parameters]
@@ -169,9 +168,9 @@
                          :arguments :object)
           old-object (color-changed-object content (:color parameters))
           guess (and (or new-object old-object)
-                     (make-guess component new-object old-object
-                                 (+ 1 (mod (count guesses) (:num-guesses parameters)))
-                                 content parameters))]
+                     (make-guess  new-object old-object
+                                  (+ 1 (mod (count guesses) (:num-guesses parameters)))
+                                  content parameters))]
 
       ;;Every time we produce a guess, we want to push a button. Additionally,
       ;;we want to remember all the guesses for the curren trial. :num-guesses
@@ -181,19 +180,19 @@
         (and guess
              (>= (count guesses) (:num-guesses parameters)))
         (reset! (:buffer component)
-                (list guess (push-button component guess)))
+                (list guess (push-button guess)))
 
         guess
         (reset! (:buffer component)
-                (concat (list guess (push-button component guess))
+                (concat (list guess (push-button guess))
                         guesses))
 
         :else
         (reset! (:buffer component) guesses))))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method NewObjectGuessRecorder [comp ^java.io.Writer w]
   (.write w (format "NewObjectGuessRecorder{}")))

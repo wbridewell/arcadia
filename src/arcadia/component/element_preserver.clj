@@ -25,26 +25,27 @@
     (assoc-in element [:arguments :old] new)
     element))
 
-(defrecord ElementPreserver [buffer predicate] Component
+(defrecord ElementPreserver [buffer predicate]
+  Component
   (receive-focus
-   [component focus content]
+    [component focus content]
    ;; Each cycle, report anything from the last cycle
    ;; for which the predicate function is true
-   (reset! (:buffer component)
-           (filter #(and (predicate %) (not= % focus)) content))
+    (reset! (:buffer component)
+            (filter #(and (predicate %) (not= % focus)) content))
 
    ;; update all of the objects internal to the elements
-   (doseq [equality (filter #(and (= (:name %) "memory-equality")
-                                  (-> % :arguments :old seq))
-                            content)]
-     (reset! (:buffer component)
-             (map #(update-element % (-> equality :arguments :old)
-                                   (-> equality :arguments :new))
-                  @(:buffer component)))))
+    (doseq [equality (filter #(and (= (:name %) "memory-equality")
+                                   (-> % :arguments :old seq))
+                             content)]
+      (reset! (:buffer component)
+              (map #(update-element % (-> equality :arguments :old)
+                                    (-> equality :arguments :new))
+                   @(:buffer component)))))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method ElementPreserver [comp ^java.io.Writer w]
   (.write w (format "ElementPreserver{}")))

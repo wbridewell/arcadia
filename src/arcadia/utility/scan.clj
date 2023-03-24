@@ -16,7 +16,7 @@ with the following parameters:
   arcadia.utility.scan
   (:require (arcadia.utility [vectors :as vec]
                              [relations :as rel] [general :as g] [gaze :as gaze] [objects :as obj] [descriptors :as d])
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             arcadia.architecture.registry))
 
 (def default-parameters
@@ -121,8 +121,8 @@ with the following parameters:
                                   x y x-vel y-vel sensor relation context
                                   start-descriptor target-descriptor
                                   dimension track-interceptors?]
-                           :or {x (-> start (obj/get-region content) reg/center :x)
-                                y (-> start (obj/get-region content) reg/center :y)
+                           :or {x (-> start (obj/get-region content) geo/center :x)
+                                y (-> start (obj/get-region content) geo/center :y)
                                 x-vel (-> start :arguments :precise-delta-x)
                                 y-vel (-> start :arguments :precise-delta-y)
                                 start-descriptor (d/object-descriptor)
@@ -241,7 +241,7 @@ with the following parameters:
   ([[x y] [dx dy] intersection]
    (when (and x y dx dy intersection
               (not (and (zero? dx) (zero? dy))))
-     (/ (reg/distance {:x x :y y} intersection) (vec/norm [dx dy])))))
+     (/ (geo/distance {:x x :y y} intersection) (vec/norm [dx dy])))))
 
 (defn extrapolate-loc
   "Extrapolates an object's position over time given its velocity and current location."

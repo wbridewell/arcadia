@@ -2,7 +2,7 @@ Descriptors
 ===
 
 ## What's an Interlingua Element?
-ARCADIA consists of many components which implement a wide range of functions ranging from image processing and basic vision to semantic labeling, enumeration, and memory maintenance. While each of these functions make use of different sorts of data representations, a component must be able to receive input from other components for processing, and it must be able to produce output to other components for later processing. To deal with this, ARCADIA uses a standard data format called an interlingua element, which is a hash-map containing the top-level keywords `:name`, `:arguments`, `:type`, `:source`, and `:world`. The `:arguments` value of an interlingua element is itself a hash map containing arbitrary data structures specific to that element.
+ARCADIA consists of many components which implement a wide range of functions ranging from image processing and basic vision to semantic labeling, enumeration, and memory maintenance. While each of these functions make use of different sorts of data representations, a component must be able to receive input from other components for processing, and it must be able to produce output to other components for later processing. To deal with this, ARCADIA uses a standard data format called an interlingua element, which is a hash-map containing the top-level keywords `:name`, `:arguments`, `:type`, and `:world`. The `:arguments` value of an interlingua element is itself a hash map containing arbitrary data structures specific to that element.
 
 Here's what an interlingua element looks like in Clojure:
 ```Clojure
@@ -10,7 +10,6 @@ Here's what an interlingua element looks like in Clojure:
  :arguments {:color "blue"
              :shape "rectangle"}
  :type "instance"
- :source arcadia.component.VSTM
  :world "vstm"}
  ```
 
@@ -46,7 +45,6 @@ The function `descriptor-matches` takes a descriptor and an interlingua element,
                      {:name "fixation"
                       :arguments {:reason "color"}
                       :type "instance"
-                      :source arcadia.component.ColorHighlighter
                       :world nil})
 ```
 returns `true`, while the function call
@@ -55,7 +53,6 @@ returns `true`, while the function call
                      {:name "object"
                       :arguments {:color "red"}
                       :type "vstm"
-                      :source arcadia.component.VSTM
                       :world nil})
 ```
 returns `nil`.
@@ -207,30 +204,6 @@ The `receive-focus` function of components are primarily written in three stages
     (format-output (...some function calls... input))
 ```
 
-## Use in Attentional Strategies
-Attentional strategies are functions that select the highest-priority interlingua among a set of interlingua elements called accessible content. This ranking is typically implemented in a large or statement, with each successive disjunct being lower in priority to its predecessor. Each disjunct is a subset of accessible content obtained by selecting the first available (or a random) element matching some constraint: this pattern is perfectly suited for the `first-element` and `rand-element` macros.
-
-Here's a simplified example of how these macros can be used in an attentional strategy:
-```Clojure
-(defn select-focus [expected]
-  [(or (first-element expected :name "gaze" :saccading? true)
-       (first-element expected :name #{"memorize" "memory-update"})
-       (first-element expected :name "scan" :ongoing? true)
-       (rand-element expected :name "object" :type "instance" :world nil)
-       (first-element expected :name "saccade")
-       (rand-element expected :name "scan"))
-       (rand-element expected :name "scan" :relation #(= (:context %) "amount")))
-
-       ;;;;;Fixations;;;;;;;;;
-       (rand-element expected :name "fixation" :reason "gaze")
-
-       ...
-
-       (rand-element expected :name "fixation")
-       (rand-if-any (seq expected)))
-     expected]))
-```
-
 ## Use in Object Recognition
 Descriptors are not only useful for searching through interlingua elements, but also can have a special use with regard to objects: when an interlingua element describing some object in the visual field matches some descriptor, it can be labeled accordingly. Descriptors can be labeled using the function `label-descriptor`:
 
@@ -260,7 +233,6 @@ Finally, once we've created all of the object descriptors we need, we can identi
 (get-label {:name "object"
             :arguments {:color "red" :shape "square"}
             :type "instance"
-            :source arcadia.component.VSTM
             :world "vstm"}
            (list red-circle-descr red-square-descr red-descr))
 ```
@@ -269,7 +241,6 @@ evaluates to `"the red square"`,
 (get-label {:name "object"
             :arguments {:color "red" :shape "octagon"}
             :type "instance"
-            :source arcadia.component.VSTM
             :world "vstm"}
            (list red-circle-descr red-square-descr red-descr))
 ```
@@ -278,8 +249,11 @@ evaluates to `"the red object"`, and
 (get-label {:name "object"
             :arguments {:color "blue" :shape "square"}
             :type "instance"
-            :source arcadia.component.VSTM
             :world "vstm"}
            (list red-circle-descr red-square-descr red-descr))
 ```
 evaluates to `nil`.
+
+## Use in Attentional Strategies
+
+See [Attentional Strategies](attentional_strategies.md).

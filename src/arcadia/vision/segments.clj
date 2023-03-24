@@ -1,5 +1,6 @@
 (ns
-  ^{:doc
+  ^{:author "Andrew Lovett"
+    :doc
     "Provides support for working with segments. Segments represent locations of
      interest in the 2D visual field that might corespond to objects in the world.
      Segments are represented as hash-maps that should include, at a minimum, a
@@ -17,21 +18,23 @@
                      in which this segment was found
      input: The input image in which this segment was found"}
   arcadia.vision.segments
-  (:require [arcadia.vision [features :as f] [regions :as reg]
-                            [view-transform :as xform]]
-            [arcadia.utility [general :as g] [opencv :as cv]]))
+  (:require [arcadia.vision.features :as f]
+            [arcadia.vision.view-transform :as xform]
+            [arcadia.utility.general :as g]
+            [arcadia.utility.geometry :as geo]
+            [arcadia.utility.opencv :as cv]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;Helper fns for view transormations on segments
 
 (defn- crop-segment
-  "Takes a segment and crops it so that it fits on an image of size [w h] image-size.
+  "Takes a segment and crops it so that it fits on an image of size {:width w :height h} image-size.
    This means returning a new segment with arguments
    {:region :mask :image}, where each of these fields is cropped if it is non-nil."
   [segment image-size]
   (let [{old-min-x :x old-min-y :y old-w :width old-h :height :as reg} (:region segment)
         {new-min-x :x new-min-y :y new-w :width new-h :height :as new-reg}
-        (reg/crop reg image-size)]
+        (geo/crop reg image-size)]
     (cond
       ;;We've cropped out the entire segment.
       (nil? new-min-x)
@@ -67,21 +70,21 @@
           (empty? ops)
           (let [{w :width h :height :as region}
                 (cond-> {:x (int x) :y (int y) :width (int w) :height (int h)}
-                        scale-factor (reg/scale scale-factor))]
+                        scale-factor (geo/scale scale-factor))]
             (when (and (pos? w) (pos? h))
               (cond-> {:region region}
-                      (:mask segment) (assoc :mask (cv/resize (:mask segment) [w h]))
-                      (:image segment) (assoc :image (cv/resize (:image segment) [w h]))
-                      image-w (crop-segment [image-w image-h])
+                      (:mask segment) (assoc :mask (cv/resize (:mask segment) region))
+                      (:image segment) (assoc :image (cv/resize (:image segment) region))
+                      image-w (crop-segment {:width image-w :height image-h})
                       true prepare)))
 
-          (vector? (first ops))
-          (let [[[old_width _] [new_width new_height]] (first ops)
-                scale (/ new_width old_width)]
+          (= (:type (first ops)) :resize)
+          (let [{old-width :old-width new-width :width new-height :height} (first ops)
+                scale (/ new-width old-width)]
             (recur (* x scale) (* y scale) (* w scale) (* h scale)
-                   new_width new_height (rest ops)))
+                   new-width new-height (rest ops)))
 
-          (map? (first ops))
+          (= (:type (first ops)) :submat)
           (let [{xdiff :x ydiff :y new_width :width new_height :height} (first ops)]
             (recur (- x xdiff) (- y ydiff) w h new_width new_height (rest ops))))))))
 
@@ -97,7 +100,7 @@
   [segment]
   (or (:area segment)
       (some-> (:mask segment) cv/count-non-zero)
-      (reg/area (:region segment))))
+      (geo/area (:region segment))))
 
 (defn add-area
   "Updates a segment to include an :area field."
@@ -105,7 +108,7 @@
   (assoc segment :area (area segment)))
 
 (defn input-size
-  "Returns the [w h] size of the input image from which this segment was taken,
+  "Returns the {:width w :height h} size of the input image from which this segment was taken,
    if available."
   [segment]
   (or (:input-size segment)
@@ -134,6 +137,14 @@
   "Updates a segment to include a :base-segment field."
   [seg]
   (assoc seg :base-segment (base-segment seg)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;Function for stripping metadata out of segments.
+
+(defn simplify 
+  "Strips unneeded metadata fields out of a segment."
+  [seg]
+  (select-keys seg [:image :mask :region :view-transform]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;View transformation functions for segments.
@@ -191,15 +202,14 @@
   "Scales a segment by the specified scale factor. If the segment's :input or
    :view-transform is defined, then crops the resulting segment to fit in the image."
   [segment scale-factor]
-  (let [{new-w :width new-h :height :as new-region}
-        (-> (:region segment) reg/unprepare (reg/scale scale-factor))
+  (let [new-region (-> (:region segment) geo/unprepare (geo/scale scale-factor))
         input-size (input-size segment)]
     (cond-> {:region new-region
              :input (:input segment)
              :input-size input-size
              :view-transform (:view-transform segment)}
-            (:mask segment) (assoc :mask (cv/resize (:mask segment) [new-w new-h]))
-            (:image segment) (assoc :image (cv/resize (:image segment) [new-w new-h]))
+            (:mask segment) (assoc :mask (cv/resize (:mask segment) new-region))
+            (:image segment) (assoc :image (cv/resize (:image segment) new-region))
             input-size (crop-segment input-size)
             true prepare)))
 
@@ -214,7 +224,7 @@
    amount."
   [segment amount]
   (let [input-size (input-size segment)]
-    (cond-> {:region (-> (:region segment) reg/unprepare (reg/translate amount))
+    (cond-> {:region (-> (:region segment) geo/unprepare (geo/translate amount))
              :mask (:mask segment)
              :image (:image segment)
              :input (:input segment)
@@ -235,7 +245,7 @@
    specified {:x x :y y} location."
   [segment location]
   (let [input-size (input-size segment)]
-    (cond-> {:region (-> (:region segment) reg/unprepare (reg/translate-to location))
+    (cond-> {:region (-> (:region segment) geo/unprepare (geo/translate-to location))
              :mask (:mask segment)
              :image (:image segment)
              :input (:input segment)
@@ -256,8 +266,8 @@
    specified {:x x :y y} location."
   [segment location]
   (let [input-size (input-size segment)]
-    (cond-> {:region (-> (:region segment) reg/unprepare
-                         (reg/translate-center-to location))
+    (cond-> {:region (-> (:region segment) geo/unprepare
+                         (geo/translate-center-to location))
              :mask (:mask segment)
              :image (:image segment)
              :input (:input segment)
@@ -280,7 +290,7 @@
    :input, :view-transform, :image (if input is non-nil), and :base-segment
    (if base-segment? is true)."
   [segment & {:keys [input view-transform base-segment?]}]
-  (cond-> (update segment :region reg/prepare)
+  (cond-> (update segment :region geo/prepare)
           input (assoc :input input :image (copy input segment))
           view-transform (assoc :view-transform view-transform)
           base-segment? add-base-segment))
@@ -291,17 +301,17 @@
 (defn distance
   "Distance between two segments' regions."
   [s1 s2]
-  (reg/distance (:region s1) (:region s2)))
+  (geo/distance (:region s1) (:region s2)))
 
 (defn intersect?
   "Returns true if two segments' regions intersect."
   [s1 s2]
-  (reg/intersect? (:region s1) (:region s2)))
+  (geo/intersect? (:region s1) (:region s2)))
 
 (defn bases-intersect?
   "Returns true if two segments' base-regions intersect."
   [s1 s2]
-  (reg/intersect? (base-region s1) (base-region s2)))
+  (geo/intersect? (base-region s1) (base-region s2)))
 
 (defn union
   "Computes a new segment representing the union of one or more segments, including
@@ -311,18 +321,18 @@
   (if (empty? segments)
     seg0
     (let [{x :x y :y w :width h :height :as region}
-          (apply reg/union (map :region (cons seg0 segments)))
+          (apply geo/union (map :region (cons seg0 segments)))
           mask0 (:mask seg0)
           image0 (:image seg0)
-          mask (when (and mask0 x y) (cv/zeros mask0 :size [w h]))
-          image (when (and image0 x y) (cv/zeros image0 :size [w h]))]
+          mask (when (and mask0 x y) (cv/zeros mask0 :size {:width w :height h}))
+          image (when (and image0 x y) (cv/zeros image0 :size {:width w :height h}))]
       (when (or mask image)
         (doseq [s (cons seg0 segments)]
           (let [{sx :x sy :y sw :width sh :height} (:region s)]
             (when (and mask sx sy)
               (cv/bitwise-or! (cv/submat mask (- sx x) (- sy y) sw sh) (:mask s)))
             (when (and image sx sy)
-              (cv/set-to (cv/submat image (- sx x) (- sy y) sw sh) (:image s))))))
+              (cv/set-to! (cv/submat image (- sx x) (- sy y) sw sh) (:image s))))))
       (assoc seg0 :region region :mask mask :image image))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -397,7 +407,7 @@
   (-> (cv/submat (or (:matrix src) src) (:region seg))
       (cv/min-value :mask (:mask seg))))
 
-(defn set-to
+(defn set-to!
   "Sets src to segment's :image at the locations specified by the segment's
    :region and :mask. Or, if a value (number or vector of numbers), is specified,
    then set src to that value at those locations. Input options are
@@ -408,7 +418,7 @@
             :mask (:mask seg))
    src)
   ([src seg value]
-   (cv/set-to (cv/submat (or (:matrix src) src) (:region seg)) value
+   (cv/set-to! (cv/submat (or (:matrix src) src) (:region seg)) value
               :mask (:mask seg))
    src))
 

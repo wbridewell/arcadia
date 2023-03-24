@@ -1,10 +1,9 @@
 (ns arcadia.component.episode-binder
   (:require [arcadia.utility.descriptors :as d]
-            [arcadia.utility.display :as display]
             [arcadia.utility.general :as g]
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             [arcadia.utility.objects :as obj]
-   [arcadia.component.core :refer [Component merge-parameters]]))
+            [arcadia.component.core :refer [Component]]))
 
 ;;
 ;;
@@ -31,14 +30,13 @@
   [locations objects]
   ;; the location of a spatial map entry will be a region
   ;; compare that to the regions of the object files
-  (map (fn [x] (g/find-first #(reg/= (:location x) (-> % :arguments :region)) objects)) locations))
+  (map (fn [x] (g/find-first #(geo/= (:location x) (-> % :arguments :region)) objects)) locations))
 
 
-(defn- episode-element [episode component]
+(defn- episode-element [episode]
   {:name "episode"
    :type "instance"
    :world nil
-   :source component
    :arguments {;; we only care about matching the attended location and its container
                ;; this sort of assumes that places are unique. 
                :spatial (d/descriptor :place (-> episode :allocentric :arguments :place)
@@ -68,15 +66,16 @@
               {:allocentric (d/first-element content :name "spatial-map" :perspective "allocentric")
                :egocentric egocentric-map
             ;; set of current events, need to determine when to store episodes in memory
-               :events (d/filter-elements content :name "event-stream" :world "episodic-memory")
+               ;; NOTE: probably this should be "event-stream" instead
+               :events (d/filter-elements content :name "event-episode" :world "episodic-memory")
             ;; tracked vstm elements that are at the locations in the spatial map
                :objects (visible-objects (-> egocentric-map :arguments :layout :objects)
                                          (obj/get-vstm-objects content :tracked? true))}))
-    (reset! (:buffer component) (episode-element @(:episode component) component)))
-  
+    (reset! (:buffer component) (episode-element @(:episode component))))
+
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method EpisodeBinder [comp ^java.io.Writer w]
   (.write w (format "EpisodeBinder{}")))

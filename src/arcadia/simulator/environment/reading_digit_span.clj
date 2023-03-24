@@ -5,7 +5,8 @@
  arcadia.simulator.environment.reading-digit-span
   (:require [arcadia.simulator.environment.core :refer [Environment]]
             [arcadia.utility [image :as img] [opencv :as cv]]
-            [clojure.math.numeric-tower :as math])
+            [clojure.math.numeric-tower :as math]
+            [clojure.data.generators :as dgen])
   (:import [javax.swing JFrame]
            [java.awt Color Font RenderingHints]
            [java.awt.image BufferedImage]))
@@ -195,7 +196,7 @@
                      :remaining-time (:intertrial-interval env))
 
               (= (state-value env :display-type) :intertrial)
-              (let [new-letter (rand-nth (remove (set @presented-letters) letters))]
+              (let [new-letter (dgen/rand-nth (remove (set @presented-letters) letters))]
                 (swap! (:state env) assoc
                        :display-type :letter
                        :current-letter new-letter
@@ -212,7 +213,7 @@
               ;; (pick "ba" for the conc-art condition)
               (= (state-value env :display-type) :intratrial)
               (let [new-digit (if (:conc-art? env) conc-art-syllable
-                                (rand-nth (remove #{(last @presented-digits)} digits)))]
+                                (dgen/rand-nth (remove #{(last @presented-digits)} digits)))]
                 (swap! (:state env) assoc
                        :display-type :digit
                        :current-digit new-digit

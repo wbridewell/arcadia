@@ -22,8 +22,7 @@
     {:name "update-response-parameters"
      :arguments {:threshold threshold
                  :conflict? conflict?}
-     :world nil
-     :source component
+     :world nil 
      :type "automation"}))
 
 ;; When a response is given, this component will adjust any component parameters
@@ -53,9 +52,9 @@
         (reset! (:buffer component) (parameter-update component (-> component :parameters :base-threshold) false)))))
 
   (deliver-result
-   [component]
-   ;#{@(:buffer component)}
-   ))
+    [component]
+   ;(list @buffer)
+    ))
 
 (defmethod print-method StroopControl [comp ^java.io.Writer w]
   (.write w (format "StroopControl{}")))

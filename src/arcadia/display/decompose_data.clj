@@ -10,7 +10,7 @@
            [org.opencv.videoio VideoCapture Videoio]))
 
 (def ^:private python-loaded? "Has libpython been loaded?" (atom false))
-(declare python-type get-attr dir) ;; avoid linter warnings if libpython-clj2 is not loaded.
+;; (declare python-value get-attr dir) ;; avoid linter warnings if libpython-clj2 is not loaded.
 (try
   (require '[libpython-clj2.python :refer [python-type get-attr dir]])
   (reset! python-loaded? true)
@@ -87,6 +87,14 @@
 
     :else 0))
 
+(defn- try-get-attr 
+  "Try to call get-attr on a python object, returning nil if an exception is thrown."
+  [obj attribute]
+  (try 
+    (get-attr obj attribute)
+    (catch Exception e
+      nil)))
+
 (defn decompose-data
   "If data can be decomposed, returns a map with keys :pre, a prefix (e.g., \"(\"
    for a list); :post, a postfix (e.g., \")\"); :items, a sequence of items; and
@@ -102,6 +110,7 @@
      :items
      (-> data
          (cond-> (:cycle (meta data)) (assoc :cycle (:cycle (meta data))))
+         (cond-> (:source (meta data)) (assoc :source (:source (meta data))))
          (as-> d (apply dissoc d (:excluded-keys params)))
          (->> (sort data-sort-comp)))}
 
@@ -110,7 +119,10 @@
     (seq? data) {:pre "(" :post ")" :items data}
 
     (and (vector? data) (not (map-entry? data)))
-    {:pre "[" :post "]" :items data}
+    {:pre "[" :post "]" :items data} 
+    
+    (instance? clojure.lang.PersistentQueue data)
+    {:pre "(" :post ")" :items (seq data) :name "PersistentQueue"}
 
     (instance? clojure.lang.Atom data)
     {:pre "(" :post ")" :items (list @data) :name "Atom"}
@@ -130,26 +142,25 @@
            :name (g/type-string data))
 
     (cv/general-mat-type data)
-    (let [[width height] (cv/size data)]
-      (assoc (decompose-data
-              {:width width :height height
-               :channels (cv/channels data)
-               :depth (cv/depth-symbol data)
-               :data (cv/->seq data)}
-              params)
-             :name (or (cv/mat-name data) (g/type-string data))
-             :collapse-children? true))
+    (assoc (decompose-data
+            (assoc (cv/size data)
+                   :channels (cv/channels data)
+                   :depth (cv/depth-symbol data)
+                   :data (cv/->seq data))
+            params)
+           :name (or (cv/mat-name data) (g/type-string data))
+           :collapse-children? true)
 
     (wp (and (= (type data) :pyobject) (= (python-type data) :tuple)))
     (wp (assoc (decompose-data (seq data) params)
-           :name "Py:tuple"))
+               :name "Py:tuple"))
 
     (wp (and (= (type data) :pyobject) (= (python-type data) :list)))
     (wp (assoc (decompose-data (seq data) params)
                :name "Py:list"))
 
     (wp (= (type data) :pyobject))
-    (wp (let [att-map (g/seq-valfun->map (dir data) #(get-attr data %))]
+    (wp (let [att-map (g/seq-valfun->map (dir data) #(try-get-attr data %))]
           (-> att-map
               (g/filter-vals #(#{:ndarray :cuda-gpu-mat :int :float :tuple :list :str}
                                (python-type %)))

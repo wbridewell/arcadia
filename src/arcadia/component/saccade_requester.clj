@@ -44,7 +44,7 @@
             [arcadia.sensor.stable-viewpoint :as sense]
             [arcadia.component.core :refer [Component merge-parameters]]
             [arcadia.utility [general :as g] [gaze :as gaze] [objects :as obj]]
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             clojure.core.matrix))
 
 (def ^:parameter ^:required sensor "a sensor that provides visual input (required)" nil)
@@ -82,9 +82,9 @@
   velocities to degrees per second."
   [fixation sensor]
   (if (and (-> fixation :arguments :object) (-> fixation :arguments :delta-x))
-    [(gaze/x-pixels->degrees (-> fixation :arguments :object :arguments :region reg/center :x) sensor)
+    [(gaze/x-pixels->degrees (-> fixation :arguments :object :arguments :region geo/center :x) sensor)
      (gaze/pixels-incr->degrees-second (-> fixation :arguments :delta-x) sensor)
-     (gaze/y-pixels->degrees (-> fixation :arguments :object :arguments :region reg/center :y) sensor)
+     (gaze/y-pixels->degrees (-> fixation :arguments :object :arguments :region geo/center :y) sensor)
      (gaze/pixels-incr->degrees-second (-> fixation :arguments :delta-y) sensor)]
     [nil nil nil nil]))
 
@@ -100,7 +100,7 @@
     [nil nil nil nil]))
 
 (defn- make-saccade
-  [x x-vel y y-vel gx gx-vel gy gy-vel scan obj source]
+  [x x-vel y y-vel gx gx-vel gy gy-vel scan obj]
   (let [x-amp (+ x-intercept
                  (* (- x gx) x-positional-error)
                  (* (- x-vel gx-vel) (if scan x-retinal-slip-scans x-retinal-slip)))
@@ -121,7 +121,6 @@
                  :duration (amplitude->duration amplitude)
                  :target (or scan obj)}
      :world nil
-     :source source
      :type "action"}))
 
 (defn- valid-saccade?
@@ -139,32 +138,31 @@
 (defrecord SaccadeRequester [buffer sensor]
   Component
   (receive-focus
-   [component focus content]
-   (let [fixation (g/find-first #(and (= (:name %) "fixation")
-                                      (= (-> % :arguments :reason) "maintenance"))
-                                content)
-         old-scan (g/find-first #(= (:name %) "old-scan") content)
-         old-gaze (g/find-first #(= (:name %) "old-gaze") content)
-         scan (when (and (= (:name focus) "scan") old-scan) focus)
-         [x x-vel y y-vel] (if scan
-                             (convert-scan-info old-scan (:sensor component))
-                             (convert-object-info fixation (:sensor component)))
-         saccade (when (and x-vel (-> old-gaze :arguments :x-vel))
-                   (make-saccade x x-vel y y-vel
-                                 (-> old-gaze :arguments :x)
-                                 (-> old-gaze :arguments :x-vel)
-                                 (-> old-gaze :arguments :y)
-                                 (-> old-gaze :arguments :y-vel)
-                                 scan
-                                 (-> fixation :arguments :object (obj/updated-object content))
-                                 component))]
-     (if (valid-saccade? saccade (-> old-gaze :arguments :x) (-> old-gaze :arguments :y) (:sensor component))
-       (reset! (:buffer component) saccade)
-       (reset! (:buffer component) nil))))
-
+    [component focus content]
+    (let [fixation (g/find-first #(and (= (:name %) "fixation")
+                                       (= (-> % :arguments :reason) "maintenance"))
+                                 content)
+          old-scan (g/find-first #(= (:name %) "old-scan") content)
+          old-gaze (g/find-first #(= (:name %) "old-gaze") content)
+          scan (when (and (= (:name focus) "scan") old-scan) focus)
+          [x x-vel y y-vel] (if scan
+                              (convert-scan-info old-scan (:sensor component))
+                              (convert-object-info fixation (:sensor component)))
+          saccade (when (and x-vel (-> old-gaze :arguments :x-vel))
+                    (make-saccade x x-vel y y-vel
+                                  (-> old-gaze :arguments :x)
+                                  (-> old-gaze :arguments :x-vel)
+                                  (-> old-gaze :arguments :y)
+                                  (-> old-gaze :arguments :y-vel)
+                                  scan
+                                  (-> fixation :arguments :object (obj/updated-object content))))]
+      (if (valid-saccade? saccade (-> old-gaze :arguments :x) (-> old-gaze :arguments :y) (:sensor component))
+        (reset! (:buffer component) saccade)
+        (reset! (:buffer component) nil))))
+  
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method SaccadeRequester [comp ^java.io.Writer w]
   (.write w (format "SaccadeRequester{}")))

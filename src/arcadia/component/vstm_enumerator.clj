@@ -20,7 +20,7 @@
   Displays
   n/a"
   (:require [arcadia.utility.objects :as obj]
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             [arcadia.component.core :refer [Component merge-parameters]]))
 
 (def min-area 50)
@@ -30,7 +30,7 @@
 
 (defn- task-object?
   ([obj descriptors]
-   (let [seg-area (-> obj :arguments :region reg/area)
+   (let [seg-area (-> obj :arguments :region geo/area)
          shape-desc (:shape-description (:arguments obj))
          size-desc (:size-description (:arguments obj))]
        ;(and (> seg-area min-area) (< seg-area max-area))
@@ -45,13 +45,12 @@
 
 (defn- mask-object? [obj content]
   (when obj
-    (> (reg/area (obj/get-region obj content)) 100000)))
+    (> (geo/area (obj/get-region obj content)) 100000)))
 
-(defn generate-enumeration [number component]
+(defn generate-enumeration [number]
   {:name "vstm-enumeration"
    :arguments {:count number}
    :world nil
-   :source component
    :type "instance"})
 
 ;; task-specific filters
@@ -82,7 +81,7 @@
       ;; produce a subitized count if vstm is full or matches number of candidate fixations
       (cond
         (and (some #(mask-object? % content) objects) (not= (:name focus) "object"))
-        (reset! (:buffer component) (generate-enumeration (count task-objects) component))
+        (reset! (:buffer component) (generate-enumeration (count task-objects)))
 
         (and (nil? counter)
              (not (or (= (:name focus) "memorize")
@@ -91,7 +90,7 @@
              (>= (count task-objects)
                  (min (- vstm-size 1)
                       (max 1 (number-candidates content)))))
-        (reset! (:buffer component) (generate-enumeration (count task-objects) component))
+        (reset! (:buffer component) (generate-enumeration (count task-objects)))
 
         (and (nil? counter)
              (not (or (= (:name focus) "memorize")
@@ -99,14 +98,14 @@
              (> (count task-objects) 0)
              (>= (count objects)
                  (min (- vstm-size 1) (max 1 (number-candidates content)))))
-        (reset! (:buffer component) (generate-enumeration (count task-objects) component))
+        (reset! (:buffer component) (generate-enumeration (count task-objects)))
 
         :else
         (reset! (:buffer component) nil))))
 
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method VSTMEnumerator [comp ^java.io.Writer w]
   (.write w (format "VSTMEnumerator{}")))

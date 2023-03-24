@@ -43,24 +43,23 @@
   mode: exclude - inhibit regions that exclude the point
         include - inhibit regions that include the point"
   (:require [arcadia.component.core :refer [Component]]
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             [arcadia.utility [general :as g] [objects :as obj]]))
 
-(defn make-inhibition [location component]
+(defn make-inhibition [location]
   {:name "fixation-inhibition"
    :arguments {:region location
                :mode "include"
                :reason "covert-return-inhibition"}
 
    :world nil
-   :source component
    :type "instance"})
 
 
 (defrecord CovertReturnInhibitor [buffer]
   Component
   (receive-focus
-   [component focus content]
+    [component focus content]
     ;; unclear what cancels inhibition. probably not just a cycle count.
     ;; the original paper doesn't count scene dynamics, object tracking, etc.
     ;; we're going to go with "until something else is seen".
@@ -69,25 +68,25 @@
     ;; So each cycle, check whether
     ;;    (a) there's a new object or
     ;;    (b) there's a CRI left over from the last cycle.
-   (reset! buffer nil)
-   (let [old-CRI (g/find-first #(and (= (:name %) "fixation-inhibition")
-                                     (= (-> % :arguments :reason) "covert-return-inhibition"))
-                               content)]
-     (cond
-       (and (= (:name focus) "object")
-            (= (:world focus) nil))
-       (some-> (obj/get-region focus content) reg/center (make-inhibition component)
-               (->> (reset! buffer)))
+    (reset! buffer nil)
+    (let [old-CRI (g/find-first #(and (= (:name %) "fixation-inhibition")
+                                      (= (-> % :arguments :reason) "covert-return-inhibition"))
+                                content)]
+      (cond
+        (and (= (:name focus) "object")
+             (= (:world focus) nil))
+        (some-> (obj/get-region focus content) geo/center (make-inhibition)
+                (->> (reset! buffer)))
 
-       (= (:name focus) "fixation")
-       (reset! buffer nil)
+        (= (:name focus) "fixation")
+        (reset! buffer nil)
 
-       old-CRI
-       (reset! buffer old-CRI))))
+        old-CRI
+        (reset! buffer old-CRI))))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method CovertReturnInhibitor [comp ^java.io.Writer w]
   (.write w (format "CovertReturnInhibitor{}")))

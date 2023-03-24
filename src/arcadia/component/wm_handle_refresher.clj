@@ -19,11 +19,10 @@
        to be refreshed."
   (:require [arcadia.component.core :refer [Component]]))
 
-(defn- make-action-request [element source]
+(defn- make-action-request [element]
   {:name "wm-refresh"
    :arguments {:element element}
-   :world nil
-   :source source
+   :world nil 
    :type "action"})
 
 (defrecord WMHandleRefresher [buffer]
@@ -42,8 +41,8 @@
 
   (deliver-result
    [component]
-   (set (map #(make-action-request % component)
-             @(:buffer component)))))
+   (map #(make-action-request %)
+        @(:buffer component))))
 
 (defmethod print-method WMHandleRefresher [comp ^java.io.Writer w]
   (.write w (format "WMHandleRefresher{}")))

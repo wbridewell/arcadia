@@ -1,15 +1,16 @@
 (ns arcadia.core
   (:require
-    (arcadia.architecture [registry :as reg]
-                          [focus-selector :as focus-selector])
-    (arcadia.simulator.environment [core :as env])
-    (arcadia.sensor [core :as sense])
-    (arcadia.utility [model :as model]
-                     [general :as general]
-                     [evaluation :as evaluation]
-                     [data :as data]
-                     [recording :as recording]
-                     [display :as display])))
+   [arcadia.architecture.registry :as reg]
+   [arcadia.architecture.focus-selector :as focus-selector]
+   [arcadia.sensor.core :as sense]
+   [arcadia.simulator.environment.core :as env]
+   [arcadia.utility.data :as data]
+   [arcadia.utility.display :as display]
+   [arcadia.utility.evaluation :as evaluation]
+   [arcadia.utility.general :as general]
+   [arcadia.utility.model :as model]
+   [arcadia.utility.recording :as recording])
+  (:import java.util.Random))
 
 (defn print-content [registry & {:keys [focus? content?]
                                  :or {focus? true
@@ -17,7 +18,7 @@
   (println "CYCLE" (reg/cycle-num registry)
            (if focus?
              (str "FOCUS: [" (:name (reg/focus registry)) " "
-                  (str (type (:source (reg/focus registry)))) "]")
+                  (-> registry reg/focus meta :source) "]")
              "")
            (if content?
              (str "--- CONTENT:" (pr-str (sort (map :name (reg/content registry)))))
@@ -85,13 +86,13 @@
 (defn- initialize
   "Initializes the architecture, components, sensors, and model. Returns the
   registry for holding model state."
-  [model-ns env component-setup disable-displays? old-registry]
+  [model-ns env component-setup disable-displays? deterministic? old-registry]
   (if old-registry
     (let [reg (reg/swap-environment old-registry env)]
       (doseq [sensor (reg/sensors old-registry)]
         (sense/swap-environment sensor env))
       reg)
-    (let [reg (-> (reg/make-registry env)
+    (let [reg (-> (reg/make-registry env deterministic?)
                   (initialize-sensors model-ns env)
                   (initialize-components model-ns component-setup disable-displays?)
                   (reg/set-strategy
@@ -150,6 +151,9 @@
    old-registry: If this is non-nil, then an existing model run, encoded in this
                  registry, will continue on the present environment, instead of
                  creating a new registry for a new model run.
+   cycles-before-pause: If this is non-nil, then pause the model after running this many
+                        cycles. Should only be used if you have a display.controls 
+                        component for unpausing.
    record?: If this is true, the model run will be recorded to image/video files.
    recording-parameters: Hashmap of optional parameter values for recording.
    save-data?: If this is true, results from this run will be saved to a datafile.
@@ -159,41 +163,54 @@
                       Display protocol.
    return-state?: If this is true, then the function returns a hasmap with the
                   keys :registry, :recording-state, :data-state, :output-map, and
-                  :environment."
+                  :environment.
+   deterministic?: When true, ARCADIA runs in a deterministic mode suitable for debugging.
+   random-seed: Provide your own random seed. Generally not useful without deterministic? being 
+                true, but it controls all randomness in ARCADIA apart from the ordering of
+                accessible content."
   [model-ns env-ns env-parameters max-cycles
-   & {:keys [component-setup output-map old-registry record? recording-parameters
-             save-data? data-parameters reset-windows? disable-displays? return-state?]
-      :or {reset-windows? true}}]
+   & {:keys [component-setup output-map old-registry record? recording-parameters cycles-before-pause
+             save-data? data-parameters reset-windows? disable-displays? return-state? 
+             deterministic? random-seed]
+      :or {reset-windows? true
+           deterministic? false}}] 
   (when reset-windows?
-    (doseq [w (java.awt.Window/getWindows)] (.dispose w))
+    (display/clear)
     (System/gc))
   (let [env ((ns-resolve env-ns 'configure) env-parameters)
         init-registry (initialize model-ns env component-setup disable-displays?
-                                  old-registry)
+                                  deterministic? old-registry)
         env-messages? (display-environment-messages? init-registry)]
 
     (reg/with-bindings-for-run
-     init-registry
-     (env-step init-registry false)
-     (loop [output-map output-map
-            old-recording-state (when record? (recording/start recording-parameters))
-            old-data-state (when save-data? (data/start data-parameters))
-            old-registry init-registry]
+      init-registry
+      (cond random-seed (Random. random-seed)
+            deterministic? (Random. 42) ;; ensure fixed seed if none specified
+            :else (Random.))
+      (env-step init-registry false)
+      (loop [output-map output-map
+             cycles-before-pause cycles-before-pause
+             old-recording-state (when record? (recording/start recording-parameters))
+             old-data-state (when save-data? (data/start data-parameters))
+             old-registry init-registry]
 
-       (let [registry (step old-registry)
-             {done? :done? data :data message :message :as env-output}
-             (env-step registry true)
-             _ (when (and message env-messages?)
-                 (display-environment-message message env-output))
-             data-state (some->> old-data-state (data/save data registry))
-             recording-state (some->> old-recording-state
-                                      (recording/record (reg/frames registry)))]
+        (let [registry (step old-registry)
+              {done? :done? data :data message :message :as env-output}
+              (env-step registry true)
+              _ (when (and message env-messages?)
+                  (display-environment-message message env-output))
+              data-state (some->> old-data-state (data/save data registry))
+              recording-state (some->> old-recording-state
+                                       (recording/record (reg/frames registry)))]
+          (when (some-> cycles-before-pause (= 0))
+            (reg/pause registry))
 
-         (if (or (and max-cycles (>= (reg/cycle-num registry) max-cycles))
-                 (reg/stopped? registry) done?)
-           (finish registry env output-map recording-state data-state return-state?)
-           (recur (evaluation/update-output-map output-map registry)
-                  recording-state data-state registry)))))))
+          (if (or (and max-cycles (>= (reg/cycle-num registry) max-cycles))
+                  (reg/stopped? registry) done?)
+            (finish registry env output-map recording-state data-state return-state?)
+            (recur (evaluation/update-output-map output-map registry)
+                   (some-> cycles-before-pause dec)
+                   recording-state data-state registry)))))))
 
 (defn- step-times
   "Step through n processing cycles"
@@ -287,9 +304,11 @@
   (doseq [w (java.awt.Window/getWindows)] (.dispose w))
   (let [env (apply (ns-resolve env-ns 'configure) [environment-arguments])
         ;;run the model for a number of cycles
-        init-registry (initialize model-ns env component-setup false nil)
+        init-registry (initialize model-ns env component-setup false true nil)
+        random-generator (Random.)
         registry (reg/with-bindings-for-run init-registry
-                     (step-times init-registry cycles))]
+                   random-generator
+                   (step-times init-registry cycles))]
 
     ;; now step through the model cycle-by-cycle, taking commands from the user
     (reg/with-bindings-for-run registry

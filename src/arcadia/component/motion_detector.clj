@@ -55,7 +55,6 @@
                      :objects (list obj)
                      :event-lifespan (:motion-lifespan (:params component)))
    :type "instance"
-   :source component
    :world nil})
 
 (defn- stasis-event [obj component]
@@ -64,35 +63,35 @@
                :objects (list obj)
                :event-lifespan (:motion-lifespan (:params component))}
    :type "instance"
-   :source component
    :world nil})
 
-(defrecord MotionDetector [buffer params] Component
+(defrecord MotionDetector [buffer params]
+  Component
   (receive-focus
-   [component focus content]
-   (reset! (:buffer component)
-           (mapcat #(cond
-                      (is-moving? % (:params component))
-                      (list (motion-event % (get-direction % (:params component)) component))
+    [component focus content]
+    (reset! (:buffer component)
+            (mapcat #(cond
+                       (is-moving? % (:params component))
+                       (list (motion-event % (get-direction % (:params component)) component))
 
-                      (some-> % :arguments :precise-delta-count (>= (:delta-count (:params component))))
-                      (list (stasis-event % component)))
-                   (obj/get-vstm-objects content :tracked? true)))
-   (when (:debug (:params component))
-    (doall (map #(if (= (:event-name (:arguments %)) "stasis")
-                   (println :MOTION "-----STATIC: "
-                            (-> % :arguments :objects first :arguments
-                                ((juxt :color :precise-delta-x :precise-delta-y :precise-delta-count))))
-                   (println :MOTION "-----MOTION: "
-                            (-> % :arguments :objects first :arguments
-                                ((juxt :color :precise-delta-x :precise-delta-y :precise-delta-count)))
-                            (-> % :arguments ((juxt :x-dir :y-dir)))
-                            (-> % :arguments :objects first :arguments :direction-change?)))
-                @(:buffer component)))))
+                       (some-> % :arguments :precise-delta-count (>= (:delta-count (:params component))))
+                       (list (stasis-event % component)))
+                    (obj/get-vstm-objects content :tracked? true)))
+    (when (:debug (:params component))
+      (doall (map #(if (= (:event-name (:arguments %)) "stasis")
+                     (println :MOTION "-----STATIC: "
+                              (-> % :arguments :objects first :arguments
+                                  ((juxt :color :precise-delta-x :precise-delta-y :precise-delta-count))))
+                     (println :MOTION "-----MOTION: "
+                              (-> % :arguments :objects first :arguments
+                                  ((juxt :color :precise-delta-x :precise-delta-y :precise-delta-count)))
+                              (-> % :arguments ((juxt :x-dir :y-dir)))
+                              (-> % :arguments :objects first :arguments :direction-change?)))
+                  @(:buffer component)))))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method MotionDetector [comp ^java.io.Writer w]
   (.write w (format "MotionDetector{}")))

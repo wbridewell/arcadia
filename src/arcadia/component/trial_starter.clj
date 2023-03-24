@@ -2,12 +2,11 @@
   (:require [arcadia.component.core :refer [Component merge-parameters]]
             [arcadia.utility.descriptors :as d]))
 
-(defn- push-button [component]
+(defn- push-button []
   {:name "push-button"
    :arguments {:button-id :go-button}
    :type "action"
-   :world nil
-   :source component})
+   :world nil})
 
 (defrecord TrialStarter [buffer flag parameters]
   Component
@@ -23,7 +22,7 @@
           (and (false? @flag) (d/not-any-element content :name "image-segmentation" :segments seq))
          ;; if there are no segments (intertrial) and we haven't pushed the button yet,
          ;; push the button.
-          (reset! (:buffer component) (push-button component))
+          (reset! (:buffer component) (push-button))
 
           (and (true? @flag) (d/some-element content :name "image-segmentation" :segments seq))
          ;; if there are text segments, reset that we haven't pushed the button.
@@ -32,7 +31,7 @@
 
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method TrialStarter [comp ^java.io.Writer w]
   (.write w (format "TrialStarter{}")))

@@ -38,7 +38,7 @@
 
 
 
-(defn- global-location 
+(defn- global-location
   "Convert object's local location to a location in the global map."
   [agent-loc agent-dir eg-idx]
   (let [agent-x (first agent-loc)
@@ -50,7 +50,7 @@
       "right" [(+ agent-x ego-x) (+ agent-y ego-y (- ego-row))]
       "down" [(+ agent-x ego-row (- ego-y)) (+ agent-y ego-x)]
       "left" [(- agent-x ego-x) (+ agent-y ego-row (- ego-y))]
-      "up" [(+ agent-x ego-y (- ego-row)) (- agent-y ego-x) ])))
+      "up" [(+ agent-x ego-y (- ego-row)) (- agent-y ego-x)])))
 
 (defn- semantics [mgpoint]
   {:category  (mg/category mgpoint)
@@ -76,7 +76,6 @@
                :segments (object-segments (:image obs) (:direction obs) (:location obs))
                :sensor (:sensor component)}
    :world nil
-   :source component
    :type "instance"})
 
 (defrecord MinigridSegmenter [sensor buffer]
@@ -88,7 +87,7 @@
                                             component))))
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method MinigridSegmenter [comp ^java.io.Writer w]
   (.write w (format "MinigridSegmenter{}")))

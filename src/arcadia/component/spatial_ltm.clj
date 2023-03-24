@@ -74,38 +74,37 @@
   (select-keys x [:place :container :layout]))
 
 (defn- recall-element
-  [x component]
+  [x]
   (when x
-    (assoc x :source component :world "memory")))
+    (assoc x :world "memory")))
 
 (defrecord SpatialLTM [buffer database]
   Component
 
   (receive-focus
-   [component focus content]
-   (let [egocentric-map (d/first-element content :name "spatial-map" :perspective "egocentric")
-         allocentric-map (d/first-element content :name "spatial-map" :perspective "allocentric")]
-     (reset! (:buffer component) nil)
-     (cond
-       (d/element-matches? focus :name "memory-retrieval" :type "action" :world nil)
-       (when-let [query (-> focus :arguments :descriptor)]
-         (reset! (:buffer component)
-                 (recall-element
-                  (d/rand-match query (seq @(:database component)))
-                  component)))
+    [component focus content]
+    (let [egocentric-map (d/first-element content :name "spatial-map" :perspective "egocentric")
+          allocentric-map (d/first-element content :name "spatial-map" :perspective "allocentric")]
+      (reset! (:buffer component) nil)
+      (cond
+        (d/element-matches? focus :name "memory-retrieval" :type "action" :world nil)
+        (when-let [query (-> focus :arguments :descriptor)]
+          (reset! (:buffer component)
+                  (recall-element
+                   (d/rand-match query (seq @(:database component))))))
 
        ;; store a layout in spatial LTM when an object is explicitly stored in working memory.
        ;; the layout for the same location will be updated with the latest version, which is 
        ;; not quite right because we can obviously recognize major differences in layout from 
        ;; previous visits. what we lack is a meaningful change detector for layouts that could
        ;; treat maps of the same location as different from each other, say as "B1-v1" and "B1-v2"
-       (d/element-matches? focus :name "memorize" :type "action" :world nil
-                           :element #(d/element-matches? % :name "object"))
-       (swap! (:database component) conj (spatial-data (:arguments allocentric-map))))))
+        (d/element-matches? focus :name "memorize" :type "action" :world nil
+                            :element #(d/element-matches? % :name "object"))
+        (swap! (:database component) conj (spatial-data (:arguments allocentric-map))))))
 
   (deliver-result
     [component]
-    (set @(:buffer component))))
+    @buffer))
 
 (defmethod print-method SpatialLTM [comp ^java.io.Writer w]
   (.write w (format "SpatialLTM{}")))

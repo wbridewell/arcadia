@@ -3,7 +3,7 @@
   (:require [arcadia.component.core :refer [Component merge-parameters]]
             (arcadia.utility [descriptors :as d] [general :as g]
                              [objects :as obj])
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             [clojure.set :refer [difference]]))
 
 ;;; Visual short-term memory
@@ -89,9 +89,9 @@
   (let [rect0 (obj/get-estimated-region focus locations)
         rect1 (obj/get-estimated-region object locations)
         ;;Check whether each object even has a location in space
-        located?0 (reg/positioned? rect0)
-        located?1 (reg/positioned? rect1)
-        overlap (and located?0 located?1 (reg/intersection rect0 rect1))]
+        located?0 (geo/positioned? rect0)
+        located?1 (geo/positioned? rect1)
+        overlap (and located?0 located?1 (geo/intersection rect0 rect1))]
     (and rect0 rect1
          (if diff-size-comparator
            (diff-size-comparator focus object)
@@ -99,9 +99,9 @@
          (if (or (not located?0) (not located?1))
            (= located?0 located?1)
            (or (and (reasonable-intersection?
-                     overlap (* (reg/area rect0) intersection-similarity-threshold))
+                     overlap (* (geo/area rect0) intersection-similarity-threshold))
                     (reasonable-intersection?
-                     overlap (* (reg/area rect1) intersection-similarity-threshold)))
+                     overlap (* (geo/area rect1) intersection-similarity-threshold)))
                (and diff-loc-comparator (diff-loc-comparator focus object))
                ;;Lastly, handle the special case where an object just disappeared
                ;;(there's no corresponding object location) but we don't kow it yet.
@@ -125,13 +125,12 @@
       (-> (sort-by #(-> % :arguments :timestamp) < objects) first :arguments :slot)))
 
 (defn- remember-object
-  [obj old-object new-slot timestamp source]
+  [obj old-object new-slot timestamp]
   {:name "object"
    :arguments (assoc (:arguments obj)
                      :slot (or (-> old-object :arguments :slot) new-slot)
                      :timestamp timestamp)
    :world "vstm"
-   :source source
    :type "instance"})
 
 (defn- update-object-status
@@ -153,20 +152,18 @@
        objs))
 
 (defn- make-old-relation
-  [current previous origin source]
+  [current previous origin]
   {:name "visual-equality"
    :arguments {:new current :old previous :object current :origin origin}
    :world nil
-   :type "relation"
-   :source source})
+   :type "relation"})
 
 (defn- make-new-relation
-  [current origin source]
+  [current origin]
   {:name "visual-new-object"
    :arguments {:object current :origin origin}
    :world nil
-   :type "event"
-   :source source})
+   :type "event"})
 
 ;; Look for an object in the focus.  If there is one, compare it to existing
 ;; objects in vstm to see if it's a match. Then update vstm and generate
@@ -214,7 +211,7 @@
                          (remember-object focus-object old-object
                                           (get-new-object-slot-number
                                            objects parameters)
-                                          (swap! counter inc) component))
+                                          (swap! counter inc)))
 
          updated-objs (update-VSTM-status
                        (remove #(same-slot? % new-object) objects)
@@ -232,9 +229,8 @@
                 updated-objs
                 new-object
                 (or (and old-object (make-old-relation new-object old-object
-                                                       focus-object component))
-                    (and focus-object (make-new-relation new-object focus-object
-                                                         component))))
+                                                       focus-object))
+                    (and focus-object (make-new-relation new-object focus-object))))
 
                (and (= (:name focus) "memorize") (= (:name (:element (:arguments focus))) "number-report"))
                []
@@ -244,7 +240,7 @@
 
   (deliver-result
    [component]
-   (set @(:buffer component))))
+   @buffer))
 
 (defmethod print-method VSTM [comp ^java.io.Writer w]
   (.write w (format "VSTM{}")))

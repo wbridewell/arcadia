@@ -12,7 +12,7 @@
    * event, with a :event-name color-change, and the new object stored in :objects"
   (:require [arcadia.component.core :refer [Component merge-parameters]]
             [arcadia.utility [general :as g] [objects :as obj]]
-            [arcadia.vision.regions :as reg]))
+            [arcadia.utility.geometry :as geo]))
 
 (def ^:parameter event-lifespan "the number of cycles this event lasts before decaying" 23)
 
@@ -36,26 +36,26 @@
                  :event-lifespan (:event-lifespan component)
                  :objects (list obj)}
      :type "instance"
-     :source component
      :world nil}))
 
-(defrecord ColorChangeDetector [buffer event-lifespan] Component
+(defrecord ColorChangeDetector [buffer event-lifespan]
+  Component
   (receive-focus
-   [component focus content]
-   (->> (obj/get-vstm-objects content :tracked? true)
-        (map (fn [obj]
-               (make-event obj
-                           (g/find-first #(and (= (:name %) "fixation")
-                                               (= (:reason (:arguments %)) "color")
-                                               (reg/intersect? (-> obj :arguments :region)
-                                                               (-> % :arguments :segment :region)))
-                                         content)
-                           component)))
-        (remove nil?)
-        (reset! (:buffer component))))
+    [component focus content]
+    (->> (obj/get-vstm-objects content :tracked? true)
+         (map (fn [obj]
+                (make-event obj
+                            (g/find-first #(and (= (:name %) "fixation")
+                                                (= (:reason (:arguments %)) "color")
+                                                (geo/intersect? (-> obj :arguments :region)
+                                                                (-> % :arguments :segment :region)))
+                                          content)
+                            component)))
+         (remove nil?)
+         (reset! (:buffer component))))
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method ColorChangeDetector [comp ^java.io.Writer w]
   (.write w (format "ColorChangeDetector{}")))

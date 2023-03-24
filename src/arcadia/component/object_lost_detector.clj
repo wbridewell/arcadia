@@ -19,7 +19,6 @@
   {:name "object-lost"
    :arguments {:descriptor @(:descriptor component)}
    :type "instance"
-   :source component
    :world nil})
 
 (defrecord ObjectLostDetector [buffer descriptor] Component
@@ -38,7 +37,7 @@
 
   (deliver-result
    [component]
-   #{@(:buffer component)}))
+   (list @buffer)))
 
 (defmethod print-method ObjectLostDetector [comp ^java.io.Writer w]
   (.write w (format "ObjectLostDetector{}")))

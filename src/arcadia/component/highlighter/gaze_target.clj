@@ -26,12 +26,11 @@
             [arcadia.utility.general :as g]))
 ;; NOTE: References to "scan" are for a model that is still in progress.
 
-(defn- make-fixation [object component]
+(defn- make-fixation [object]
   {:name "fixation"
    :arguments {:object object
                :reason "gaze"}
    :world nil
-   :source component
    :type "instance"})
 
 (defn- updated-gaze
@@ -56,20 +55,20 @@
 (defrecord GazeTargetHighlighter [buffer]
   Component
   (receive-focus
-   [component focus content]
-   (let [target (or (updated-gaze content)
-                    (updated-fixation focus content))]
-     (condp = (:name target)
-       "object" (reset! (:buffer component) (make-fixation target component))
-       "scan" (reset! (:buffer component) (assoc target :source component))
-       (reset! (:buffer component) nil))))
+    [component focus content]
+    (let [target (or (updated-gaze content)
+                     (updated-fixation focus content))]
+      (condp = (:name target)
+        "object" (reset! (:buffer component) (make-fixation target))
+        "scan" (reset! (:buffer component) target)
+        (reset! (:buffer component) nil))))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method GazeTargetHighlighter [comp ^java.io.Writer w]
   (.write w (format "GazeTargetHighlighter{}")))
 
 (defn start []
-   (->GazeTargetHighlighter (atom nil)))
+  (->GazeTargetHighlighter (atom nil)))

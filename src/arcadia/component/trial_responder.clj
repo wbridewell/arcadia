@@ -20,12 +20,11 @@
 (def ^:parameter response-fn "function that takes content as an argument and determines the response to be made" 
   (fn [content] :yes-button))
 
-(defn- push-button [component response]
+(defn- push-button [response]
   {:name "push-button"
    :arguments {:button-id response}
    :type "action"
-   :world nil
-   :source component})
+   :world nil})
 
 (defrecord TrialResponder [buffer flag parameters]
   Component
@@ -53,11 +52,11 @@
               (d/some-element content :name "image-segmentation" :segments seq))
           ;; if there are segments, and we have not decided on a button press, and 
           ;; we are ready to respond, determine the appropriate button press.
-         (reset! (:buffer component) (push-button component (response-fn content)))))
+         (reset! (:buffer component) (push-button (response-fn content)))))
 
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method TrialResponder [comp ^java.io.Writer w]
   (.write w (format "TrialResponder{}")))

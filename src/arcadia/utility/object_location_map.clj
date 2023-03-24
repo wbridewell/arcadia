@@ -4,7 +4,7 @@
   (:require (arcadia.utility [vectors :as vec]
                              [general :as g]
                              [opencv :as cv])
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             [clojure.math.numeric-tower :as math]
             clojure.java.io))
 
@@ -64,7 +64,7 @@
   ([radius k w l k-neg w-neg l-neg]
 ;;    (println :image "Making mex hat..." (+ (* radius 2) 1))
    (let [width (+ (* radius 2) 1)
-         img (cv/new-java-mat [width width] cv/CV_32FC1)]
+         img (cv/new-java-mat {:width width :height width} cv/CV_32FC1)]
      (loop [row-idx 0
             buffer (vector-of :double)]
        (if (< row-idx width)
@@ -87,7 +87,7 @@
                           (conj row (+ l-neg (* value k-neg)))))
                  row))))
          ;; push the buffer into the matrix
-         (cv/set-values img 0 0 (double-array buffer))))
+         (cv/set-values! img 0 0 (double-array buffer))))
      img)))
 
 (defn- make-mex-hat-image-set
@@ -104,9 +104,9 @@
         pos-width (+ (* (int w) 2) 1)
         pos-min (int (/ (- width pos-width) 2))
         pos-max (+ pos-min (- pos-width 1))
-        img (cv/new-java-mat [pos-width pos-width] cv/CV_32FC1)
-        img2 (cv/new-java-mat [width width] cv/CV_32FC1)
-        img3 (cv/new-java-mat [width width] cv/CV_32FC1)]
+        img (cv/new-java-mat {:width pos-width :height pos-width} cv/CV_32FC1)
+        img2 (cv/new-java-mat {:width width :height width} cv/CV_32FC1)
+        img3 (cv/new-java-mat {:width width :height width} cv/CV_32FC1)]
     (loop [row-idx 0
            ;;Uses two buffers for the two Mexican hat images
            [buffer buffer2 buffer3] [(vector-of :double) (vector-of :double)
@@ -146,16 +146,16 @@
                          (conj row3 (+ l-neg2 (* value k-neg2)))))
                 [row row2 row3]))))
           ;; push the buffers into the matrices
-        (do (cv/set-values img 0 0 (double-array buffer))
-          (cv/set-values img2 0 0 (double-array buffer2))
-          (cv/set-values img3 0 0 (double-array buffer3)))))
+        (do (cv/set-values! img 0 0 (double-array buffer))
+          (cv/set-values! img2 0 0 (double-array buffer2))
+          (cv/set-values! img3 0 0 (double-array buffer3)))))
     ;; upscale the matrices back to the desired size
-    [(cv/resize img [(make-odd (int (* pos-width div)))
-                     (make-odd (int (* pos-width div)))])
-     (cv/resize img2 [(make-odd (int (* width div)))
-                      (make-odd (int (* width div)))])
-     (cv/resize img3 [(make-odd (int (* width div)))
-                      (make-odd (int (* width div)))])]))
+    [(cv/resize img {:width (make-odd (int (* pos-width div)))
+                     :height (make-odd (int (* pos-width div)))})
+     (cv/resize img2 {:width (make-odd (int (* width div)))
+                      :height (make-odd (int (* width div)))})
+     (cv/resize img3 {:width (make-odd (int (* width div)))
+                      :height (make-odd (int (* width div)))})]))
 
 ;;;;
 ;; See the function make-mex-hat-image above. This function is similar, but it
@@ -172,7 +172,7 @@
          half-height (int (/ init-height 2))
          width (+ 1 (* half-width 2))
          height (+ 1 (* half-height 2))
-         img (cv/new-java-mat [width height] cv/CV_32FC1)]
+         img (cv/new-java-mat {:width width :height height} cv/CV_32FC1)]
      ;;     (println :image "Making rectangular mex hat..." width height w w-neg)
      (loop [row-idx 0
             buffer (vector-of :double)]
@@ -209,8 +209,8 @@
          pt1 (mapv #(/ % div) pt1)
          width (+ 1 (* half-width 2))
          height (+ 1 (* half-height 2))
-         img (cv/new-java-mat [width height] cv/CV_32FC1)
-         img2 (cv/new-java-mat [width height] cv/CV_32FC1)]
+         img (cv/new-java-mat {:width width :height height} cv/CV_32FC1)
+         img2 (cv/new-java-mat {:width width :height height} cv/CV_32FC1)]
      (loop [row-idx 0
             ;;Uses two buffers for the two Mexican hat images
             [buffer buffer2] [(vector-of :double) (vector-of :double)]]
@@ -238,12 +238,12 @@
                           (conj row2 (+ l-neg2 (* value k-neg2)))))
                  [row row2]))))
          ;; push the buffers into the matrices
-         (do (cv/set-values img 0 0 (double-array buffer))
-             (cv/set-values img2 0 0 (double-array buffer2)))))
+         (do (cv/set-values! img 0 0 (double-array buffer))
+             (cv/set-values! img2 0 0 (double-array buffer2)))))
 
      ;; upscale the matrices back to the desired size
-     [(cv/resize img [(make-odd (int (* width div))) (make-odd (int (* height div)))])
-      (cv/resize img2 [(make-odd (int (* width div))) (make-odd (int (* height div)))])])))
+     [(cv/resize img {:width (make-odd (int (* width div))) :height (make-odd (int (* height div)))})
+      (cv/resize img2 {:width (make-odd (int (* width div))) :height (make-odd (int (* height div)))})])))
 
 ;;;;
 ;; Makes two mexhat images as above, but follows certain scaling rules.
@@ -436,14 +436,14 @@
   "Returns the center of the region."
   [region]
   (if (seq? region)
-    (reg/center (first region))
-    (reg/center region)))
+    (geo/center (first region))
+    (geo/center region)))
 
 (defn get-bias-center-for-region
   "Returns the center of the bias for a region, if one exist."
   [region]
   (when (seq? region)
-    (reg/center (second region))))
+    (geo/center (second region))))
 
 (defn get-mexhat-lineseg-for-region
   "Computes the points for a line segment lying at the center of the region's
@@ -507,9 +507,9 @@
                  (cv/convert-to cv/CV_8UC1))]
     {:hat src :mask mask
      :region (-> mask cv/non-zero-bounds
-                 (reg/translate {:x (- cx (/ (cv/width hat) 2) x-plus)
+                 (geo/translate {:x (- cx (/ (cv/width hat) 2) x-plus)
                                  :y (- cy (/ (cv/height hat) 2) y-plus)})
-                 reg/prepare)}))
+                 geo/prepare)}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Functions for building object-location maps
@@ -517,7 +517,7 @@
 (defn initialize-object-location-matrix
   "Set up an OpenCV matrix for use as an object-location map."
   [width height]
-  (cv/zeros [(int width) (int height)] cv/CV_32FC1))
+  (cv/zeros {:width (int width) :height (int height)} cv/CV_32FC1))
 
 (defn make-object-location-map
   "Construct a object location map by placing multiple Mexican hat images on
@@ -528,7 +528,7 @@
   the image."
   [mat foci mexican-hats mask-images base add?]
   (when (number? base)
-    (cv/set-to mat base))
+    (cv/set-to! mat base))
 
   (loop [pts foci
          hats mexican-hats
@@ -539,7 +539,6 @@
       (let [{x :x y :y} (first pts)
             hat (first hats)
             mask (first masks)
-
             old-min-x (int (- x (/ (dec (cv/width hat)) 2)))
             old-min-y (int (- y (/ (dec (cv/height hat)) 2)))
             old-max-x (+ old-min-x (dec (cv/width hat)))

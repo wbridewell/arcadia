@@ -24,27 +24,26 @@
        simulation environment."
   (:require [arcadia.component.core :refer [Component]]))
 
-(defn- make-env-action [e source]
+(defn- make-env-action [e]
   (when e
     {:name "push-button"
      :arguments {:action-command (-> e :arguments :button-id)}
      :world nil
-     :source source
      :type "environment-action"}))
 
 (defrecord ButtonPusher [buffer]
   Component
   (receive-focus
-   [component focus content]
-   (if (and (= (:type focus) "action")
-            (= (:name focus) "push-button"))
-     (reset! (:buffer component)
-             (make-env-action focus component))
-     (reset! (:buffer component) nil)))
+    [component focus content]
+    (if (and (= (:type focus) "action")
+             (= (:name focus) "push-button"))
+      (reset! (:buffer component)
+              (make-env-action focus))
+      (reset! (:buffer component) nil)))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method ButtonPusher [comp ^java.io.Writer w]
   (.write w (format "ButtonPusher{}")))

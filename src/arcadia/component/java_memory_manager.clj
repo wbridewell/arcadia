@@ -8,13 +8,13 @@
 (defrecord JavaMemoryManager [counter gc-frequency]
   Component
   (receive-focus
-   [component focus content]
-   (when (zero? (mod (swap! (:counter component) inc) gc-frequency))
-     (println "Manual garbage collect...")
-     (doall (System/gc))))
+    [component focus content]
+    (when (zero? (mod (swap! (:counter component) inc) gc-frequency))
+      (println "Manual garbage collect...")
+      (doall (System/gc))))
 
   (deliver-result
-   [component]))
+    [component]))
 
 (defmethod print-method JavaMemoryManager [comp ^java.io.Writer w]
   (.write w (format "JavaMemoryManager{}")))

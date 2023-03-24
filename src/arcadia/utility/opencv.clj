@@ -1,6 +1,6 @@
 (ns
-  ^{:doc
-    "This file provides clojure methods for many commonly used OpenCV operations.
+ ^{:doc
+   "This file provides clojure methods for many commonly used OpenCV operations.
      The methods can be called on three types of OpenCV matrices:
 
      1) Java matrixes (org.opencv.core.Mat)
@@ -20,7 +20,7 @@
      The methods in this library provide several conveniences over using the java
      OpenCV functions directly.
 
-     1) Matrix size is always specified with a [width height] vector.
+     1) Matrix size is always specified with a {:width w :height h} vector.
      2) Matrix element values can be specified with a single number (which will
         then be used for all channels) or a vector of numbers, one for each channel.
      3) Bounding boxes are represented as {:x x :y y :width width :height height},
@@ -53,7 +53,7 @@
      instead of camel case). A couple additional methods that might be useful:
      get-value/set-value: Check or change a single element in a matrix."}
   arcadia.utility.opencv
-  (:refer-clojure :exclude [merge max meta min reduce type * get])
+  (:refer-clojure :exclude [abs compare merge max meta min pr print reduce type * get])
   (:import
    [org.opencv.core Core Core$MinMaxLocResult CvType Mat MatOfInt MatOfFloat MatOfPoint
     MatOfPoint2f Point Rect Scalar Size TermCriteria]
@@ -61,7 +61,8 @@
    org.opencv.imgproc.Imgproc
    org.opencv.imgcodecs.Imgcodecs
    [java.util ArrayList])
-  (:require [arcadia.vision.regions :as reg]))
+  (:require [arcadia.utility.geometry :as geo]
+            [arcadia.utility.general :as g]))
 
 (def ^:private python-cv? "Has cv2 been loaded for python?" (atom false))
 (def ^:private python-cuda? "Has the cv2 cuda library been loaded for python?" (atom false))
@@ -116,6 +117,12 @@
 (def BORDER_REFLECT Core/BORDER_REFLECT)
 (def BORDER_REFLECT_101 Core/BORDER_REFLECT_101)
 (def BORDER_REPLICATE Core/BORDER_REPLICATE)
+(def CMP_EQ Core/CMP_EQ)
+(def CMP_GE Core/CMP_GE)
+(def CMP_GT Core/CMP_GT)
+(def CMP_LE Core/CMP_LE)
+(def CMP_LT Core/CMP_LT)
+(def CMP_NE Core/CMP_NE)
 (def COLOR_BGR2GRAY Imgproc/COLOR_BGR2GRAY)
 (def COLOR_GRAY2BGR Imgproc/COLOR_GRAY2BGR)
 (def COLOR_BGR2RGB Imgproc/COLOR_BGR2RGB)
@@ -366,7 +373,7 @@
    [mat]
    (condp = (clojure.core/type mat)
      Mat :java-mat
-     :pyobject (#{:ndarray :cuda-gpu-mat} (py/python-type mat))
+     :pyobject (#{:ndarray :gpu-mat} (py/python-type mat))
      nil)))
 
 (defn general-mat-type
@@ -384,7 +391,7 @@
    (cond
      (instance? Mat mat) :java-mat
      (= (clojure.core/type mat) :pyobject)
-     (#{:ndarray :cuda-gpu-mat} (py/python-type mat))
+     (#{:ndarray :gpu-mat} (py/python-type mat))
      :else nil)))
 
 (defn mat-name "Returns a string for the type of matrix."
@@ -392,15 +399,16 @@
   (case (mat-type mat)
     :java-mat "Mat"
     :ndarray "NP-Array"
-    :cuda-gpu-mat "GPU-Mat"
+    :gpu-mat "GPU-Mat"
     ; :meta-mat (mat-name (:matrix mat))
     nil))
 
-(wp (defn- np-shape "Shape of a numpy array."
+(wp (defn- np-shape "Shape of a numpy array, in the form [height width channels],
+                     where width and channels may not be included if they are 1."
       [src]
       (vec (py/get-attr src :shape))))
 
-(wp (defn- gpu-size "Size of a gpu mat."
+(wp (defn- gpu-size "Size of a gpu mat, in the form [width height]."
       [src]
       (vec (py/$a src size))))
 
@@ -577,11 +585,11 @@
 (defn new-java-mat
   "Returns a newly created java matrix. Input options are
    []
-   [size type]
-   [size type init-value]"
-  ([[width height] type init-value]
+   [{:width w :height h} type]
+   [{:width w :height h} type init-value]"
+  ([{width :width height :height} type init-value]
    (Mat. height width type (java-scalar init-value)))
-  ([[width height] type]
+  ([{width :width height :height} type]
    (Mat. height width type))
   ([]
    (Mat.)))
@@ -590,15 +598,15 @@
  (defn new-numpy-array
    "Returns a newly created numpy array. Input options are
    []
-   [[width height] type]
-   [[width height] type init-value]"
-   ([[width height] type init-value]
+   [{:width w :height h} type]
+   [{:width w :height h} type init-value]"
+   ([{width :width height :height} type init-value]
     (let [channels (type->channels type)
           dtype (type->dtype type)]
       (if (> channels 1)
         (np/full [height width channels] (python-scalar2 init-value channels) dtype)
         (np/full [height width] (python-scalar2 init-value channels) dtype))))
-   ([[width height] type]
+   ([{width :width height :height} type]
     (let [channels (type->channels type)
           dtype (type->dtype type)]
       (if (> channels 1)
@@ -611,25 +619,14 @@
  (defn new-gpu-mat
    "Returns a newly created gpu matrix. Input options are
    []
-   [size type]
-   [sizde type init-value]"
-   ([[width height] type init-value]
+   [{:width w :height h} type]
+   [{:width w :height h} type init-value]"
+   ([{width :width height :height} type init-value]
     (cv2/cuda_GpuMat height width type (python-scalar init-value)))
-   ([[width height] type]
+   ([{width :width height :height} type]
     (cv2/cuda_GpuMat height width type))
    ([]
     (cv2/cuda_GpuMat))))
-
-
-(defn imread-java-mat "Read in an image file and return a Java OpenCV matrix."
-  [path]
-  (Imgcodecs/imread path))
-
-(wp
- (defn imread-numpy-array "Read in an image file and return a numpy array in python."
-   [path]
-   (cv2/imread path)))
-
 
 (defmulti new-mat
   "Returns a new matrix of the same matrix type as src. Optional keys are
@@ -645,7 +642,7 @@
 
 (defmethod new-mat :java-mat
   [src & {:keys [size type depth channels value]}]
-  (let [size (or (and size (Size. (first size) (second size)))
+  (let [size (or (and size (Size. (:width size) (:height size)))
                  (.size src))
         type (or type
                  (and (or depth channels)
@@ -665,8 +662,8 @@
         [src-height src-width src-channels]
         (when (or (nil? size) (and (nil? type) (nil? channels)))
           (np-shape src))
-        height (or (second size) src-height)
-        width (or (first size) src-width 1)
+        height (or (:height size) src-height)
+        width (or (:width size) src-width 1)
         channels (or (and type (type->channels type))
                      channels
                      src-channels 1)
@@ -677,9 +674,9 @@
       (np/full shape (python-scalar2 value channels) dtype)
       (np/empty shape dtype))))
 
-(defmethod-cuda new-mat :cuda-gpu-mat
+(defmethod-cuda new-mat :gpu-mat
   [src & {:keys [size type depth channels value]}]
-  (let [size (or size (gpu-size src))
+  (let [size (or (and size [(:width size) (:height size)]) (gpu-size src))
         type (or type
                  (and (or depth channels)
                       (depth+channels->type (or depth (py/$a src depth))
@@ -693,7 +690,7 @@
 (defmulti ones
     "Creates a new matrix, with all its values initialized to 1. Can be called in
      two ways.
-     1) The first argument is a ref-mat, and :size, specified as [width height],
+     1) The first argument is a ref-mat, and :size, specified as {:width w :height h},
         and :type can be optionally provided. The output will be the same matrix
         type as ref-mat (e.g., java-mat vs. numpy array), and size and type will
         the same as ref-mat if values are not specified.
@@ -715,7 +712,7 @@
 (defmulti zeros
     "Creates a new matrix, with all its values initialized to 0. Can be called in
      two ways.
-     1) The first argument is a ref-mat, and :size, specified as [width height],
+     1) The first argument is a ref-mat, and :size, specified as {:width w :height h},
         and :type can be optionally provided. The output will be the same matrix
         type as ref-mat (e.g., java-mat vs. numpy array), and size and type will
         the same as ref-mat if values are not specified.
@@ -755,7 +752,7 @@
 (defmethod ->numpy :ndarray [src]
   src)
 
-(defmethod-cuda ->numpy :cuda-gpu-mat [src]
+(defmethod-cuda ->numpy :gpu-mat [src]
   (py/$a src download))
 
 (defmethod-py ->numpy nil [src]
@@ -775,7 +772,7 @@
 (defmethod-cuda ->gpu :ndarray [src]
   (cv2/cuda_GpuMat src))
 
-(defmethod ->gpu :cuda-gpu-mat [src]
+(defmethod ->gpu :gpu-mat [src]
   src)
 
 (defmethod-cuda ->gpu nil [src]
@@ -786,7 +783,7 @@
 
   (defmulti ->java
   "Converts a matrix to a java mat. By default, the java mat will have the same
-   depth, [width height] size, and channels as src, but different values can be
+   depth, {:width w :height h} size, and channels as src, but different values can be
    specified (note that these values only have an effect if you are converting from
    a numpy array or gpu matrix).
    Input is
@@ -798,7 +795,7 @@
 
 (defmethod-py ->java :ndarray
   [src & {:keys [depth type size channels]}]
-  (let [[width height] size
+  (let [{width :width height :height} size
         [old-height old-width old-channels] (np-shape src)
         height (or height old-height)
         width (or width old-width 1)
@@ -812,7 +809,7 @@
       (->> (py/$a src :ravel) dtt/ensure-tensor ((type->dtypefn depth)) (.put dst 0 0)))
     dst))
 
-(defmethod-cuda ->java :cuda-gpu-mat [src & rest]
+(defmethod-cuda ->java :gpu-mat [src & rest]
   (apply ->java (py/$a src download) rest))
 
 (defmethod ->java nil [src]
@@ -840,7 +837,7 @@
       (->> (py/$a src astype "int8") dtype/->byte-array)
       (-> src ((type->dtypefn depth))))))
 
-(defmethod-cuda ->array :cuda-gpu-mat [src]
+(defmethod-cuda ->array :gpu-mat [src]
   (->array (py/$a src download)))
 
 
@@ -856,7 +853,7 @@
 (defmethod-py ->mat :ndarray [_ src]
   (->numpy src))
 
-(defmethod-cuda ->mat :cuda-gpu-mat [_ src]
+(defmethod-cuda ->mat :gpu-mat [_ src]
   (->gpu src))
 
 
@@ -874,6 +871,14 @@
     :else
     (lazy-seq (cons (poll-pixel src x y) (java->seq src (inc x) y width height)))))
 
+(wp (defn- get-item->java
+      "Variant of py/get-item that ensures the returned value isn't a pyobject."
+      [src x y]
+      (let [item (py/get-item src [y x])]
+        (if (number? item)
+          item
+          (vec item)))))
+
 (wp (defn- numpy->seq
   "Helper fn for ->seq when operating on numpy arrays."
   [src x y width height]
@@ -882,11 +887,11 @@
     nil
 
     (zero? x)
-    (lazy-seq (cons (lazy-seq (cons (py/get-item src [y x]) (numpy->seq src (inc x) y width height)))
+    (lazy-seq (cons (lazy-seq (cons (get-item->java src x y) (numpy->seq src (inc x) y width height)))
                     (numpy->seq src x (inc y) width height)))
 
     :else
-    (lazy-seq (cons (py/get-item src [y x]) (numpy->seq src (inc x) y width height))))))
+    (lazy-seq (cons (get-item->java src x y) (numpy->seq src (inc x) y width height))))))
 
 (defmulti ->seq
   "Converts src to a lazy sequence of numbers. This will be a nested sequence,
@@ -898,10 +903,10 @@
   (java->seq src 0 0 (.width src) (.height src)))
 
 (defmethod-py ->seq :ndarray [src]
-  (let [[width height] (np-shape src)]
+  (let [[height width] (np-shape src)]
     (numpy->seq src 0 0 width height)))
 
-(defmethod-cuda ->seq :cuda-gpu-mat [src]
+(defmethod-cuda ->seq :gpu-mat [src]
   (->seq (->numpy src)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -910,7 +915,7 @@
 (defmulti area
   "Based on .size
    -----------------------------------------------------------------------
-   Returns the (* width height) area of a matrix."
+   Returns the (* width height) area of a matrix or other data structure."
   (fn [src] (or (mat-type src) (clojure.core/type src))))
 
 (defmethod area :java-mat [src]
@@ -920,9 +925,9 @@
   (let [[height width] (np-shape src)]
     (clojure.core/* (or width 1) height)))
 
-(defmethod-cuda area :cuda-gpu-mat [src]
-  (let [[height width] (gpu-size src)]
-    (clojure.core/* (or width 1) height)))
+(defmethod-cuda area :gpu-mat [src]
+  (let [[width height] (gpu-size src)]
+    (clojure.core/* width height)))
 
 (defmethod area clojure.lang.PersistentVector [[w h]]
   (clojure.core/* w h))
@@ -933,11 +938,45 @@
 (defmethod area clojure.lang.PersistentArrayMap [{w :width x :x h :height y :y}]
   (clojure.core/* (or w (and x 1)) (or h (and y 1))))
 
+(declare size)
+(defmulti bounds 
+  "Based on .locateROI
+   -----------------------------------------------------------------------
+   Returns the {:x x :y y :width w :height h} rectangle representing the bounds 
+   of a matrix (x and y are 0 unless it is a submatrix), or converts another data 
+   structure such as a hashmap, the sequence [x y w h] or the four arguments x,
+   y, w, h to a {:x x :y y :width w :height h} rectangle.
+   
+   NOTE: Always returns {:x 0 :y 0} for GPU matrices and numpy arrays."
+  (fn [src & rest] (or (general-mat-type src) (clojure.core/type src))))
+
+(defmethod bounds :java-mat [src]
+  (let [offset (Point.)]
+    (.locateROI src (Size.) offset)
+    (assoc (size src) :x (int (.x offset)) :y (int (.y offset)))))
+
+(defmethod-py bounds :ndarray [src]
+  (assoc (size src) :x 0 :y 0))
+
+(defmethod-cuda bounds :gpu-mat [src]
+  (assoc (size src) :x 0 :y 0))
+
+(defmethod bounds clojure.lang.PersistentVector [[x y w h]]
+  {:x x :y y :width w :height h})
+
+(defmethod bounds java.lang.Long [x y w h]
+  {:x x :y y :width w :height h})
+
+(defmethod bounds clojure.lang.PersistentHashMap [{x :x y :y w :width h :height}]
+  {:x x :y y :width (or w (and x 1)) :height (or h (and y 1))})
+
+(defmethod bounds clojure.lang.PersistentArrayMap [{x :x y :y w :width h :height}]
+  {:x x :y y :width (or w (and x 1)) :height (or h (and y 1))})
 
 (defmulti height
   "Based on .height
    -----------------------------------------------------------------------
-   Returns the height of a matrix."
+   Returns the height of a matrix or other data structure."
   (fn [src] (or (general-mat-type src) (clojure.core/type src))))
 
 (defmethod height :java-mat [src]
@@ -946,7 +985,7 @@
 (defmethod-py height :ndarray [src]
   (first (np-shape src)))
 
-(defmethod-cuda height :cuda-gpu-mat [src]
+(defmethod-cuda height :gpu-mat [src]
   (second (gpu-size src)))
 
 (defmethod height clojure.lang.PersistentVector [[_ h]]
@@ -958,37 +997,76 @@
 (defmethod height clojure.lang.PersistentArrayMap [{h :height y :y}]
   (or h (and y 1)))
 
+(defmulti point
+  "Based on .locateROI
+   -----------------------------------------------------------------------
+   Returns the {:x x :y y} point representing the origin of a matrix (x and y 
+   are 0 unless it is a submatrix), or converts another data structure such as 
+   the sequence [x y] or the pair of arguments x and y to a {:x x :y y} point.
+   
+   NOTE: Always returns {:x 0 :y 0} for GPU matrices and numpy arrays."
+  (fn [src & rest] (or (general-mat-type src) (clojure.core/type src))))
+
+(defmethod point :java-mat [src]
+  (let [offset (Point.)]
+    (.locateROI src (Size.) offset)
+    {:x (int (.x offset)) :y (int (.y offset))}))
+
+(defmethod-py point :ndarray [_]
+  {:x 0 :y 0})
+
+(defmethod-cuda point :gpu-mat [_]
+  {:x 0 :y 0})
+
+(defmethod point clojure.lang.PersistentVector [[x y]]
+  {:x x :y y})
+
+(defmethod point java.lang.Long [x y]
+  {:x x :y y})
+
+(defmethod point clojure.lang.PersistentHashMap [{x :x y :y}]
+  {:x x :y y})
+
+(defmethod point clojure.lang.PersistentArrayMap [{x :x y :y}]
+  {:x x :y y})
+
 
 (defmulti size
   "Based on .size
    -----------------------------------------------------------------------
-   Returns the [width height] size of a matrix."
-  (fn [src] (or (general-mat-type src) (clojure.core/type src))))
+   Returns the {:width w :height h} size of a matrix, or converts another 
+   data structure such as the sequence [w h] or the pair of arguments w and h 
+   to a {:width w :height h} size."
+  (fn [src & rest] (or (general-mat-type src) (clojure.core/type src))))
 
 (defmethod size :java-mat [src]
-  [(.width src) (.height src)])
+  {:width (.width src) :height (.height src)})
 
 (defmethod-py size :ndarray [src]
   (let [[height width] (np-shape src)]
-    [(or width 1) height]))
+    {:width (or width 1) :height height}))
 
-(defmethod-cuda size :cuda-gpu-mat [src]
-  (gpu-size src))
+(defmethod-cuda size :gpu-mat [src]
+  (let [[w h] (gpu-size src)]
+    {:width w :height h}))
 
 (defmethod size clojure.lang.PersistentVector [[w h]]
-  [w h])
+  {:width w :height h})
+
+(defmethod size java.lang.Long [w h]
+  {:width w :height h})
 
 (defmethod size clojure.lang.PersistentHashMap [{w :width x :x h :height y :y}]
-  [(or w (and x 1)) (or h (and y 1))])
+  {:width (or w (and x 1)) :height (or h (and y 1))})
 
 (defmethod size clojure.lang.PersistentArrayMap [{w :width x :x h :height y :y}]
-  [(or w (and x 1)) (or h (and y 1))])
+  {:width (or w (and x 1)) :height (or h (and y 1))})
 
 
 (defmulti width
   "Based on .width
    -----------------------------------------------------------------------
-   Returns the width of a matrix."
+   Returns the width of a matrix or other data structure."
   (fn [src] (or (general-mat-type src) (clojure.core/type src))))
 
 (defmethod width :java-mat [src]
@@ -998,7 +1076,7 @@
   (let [[_ width] (np-shape src)]
     (or width 1)))
 
-(defmethod-cuda width :cuda-gpu-mat [src]
+(defmethod-cuda width :gpu-mat [src]
   (first (gpu-size src)))
 
 (defmethod width clojure.lang.PersistentVector [[w]]
@@ -1064,7 +1142,7 @@
 
 ;;python's cuda implmenetation currently doesn't support operations between a
 ;;matrix and a scalar, so we have to make a new cuda-gpu-mat containing the scalar value
-(defmethod-cuda abs-diff :cuda-gpu-mat
+(defmethod-cuda abs-diff :gpu-mat
   [src1 src2 & {:keys [mask dst]}]
   (if (or (number? src2) (vector? src2))
     (cuda/absdiff
@@ -1121,7 +1199,7 @@
 
 ;;adding a scalar to a cuda-gpu-mat is currently unsupported,
 ;;so we have to make a new cuda-gpu-mat containing the scalar value.
-(defmethod-cuda add :cuda-gpu-mat
+(defmethod-cuda add :gpu-mat
   [src1 src2 & {:keys [mask dst]}]
   (if (or (number? src2) (vector? src2))
     (cuda/add
@@ -1154,7 +1232,7 @@
   [src1 alpha src2 beta & {:keys [gamma dst] :or {gamma 0}}]
   (cv2/addWeighted src1 alpha src2 beta gamma dst))
 
-(defmethod-cuda add-weighted :cuda-gpu-mat
+(defmethod-cuda add-weighted :gpu-mat
   [src1 alpha src2 beta & {:keys [gamma dst] :or {gamma 0}}]
   (cuda/addWeighted src1 alpha src2 beta gamma dst))
 
@@ -1216,7 +1294,7 @@
           max-input (cv2/convertScaleAbs nil (/ 255.0 max-input))
           true (cv2/LUT table dst)))
 
-(defmethod-cuda apply-lookup-table :cuda-gpu-mat
+(defmethod-cuda apply-lookup-table :gpu-mat
   [src {table :table max-input :max-input max-output :max-output channels :channels}
    & {:keys [dst]}]
   (let [dst (or dst (new-mat src :depth (if max-output CV_32F CV_8U) :channels channels))
@@ -1243,7 +1321,7 @@
    is the maximum distance between the original curve and its approximation. Input is
    [src epsilon closed?]
 
-   NOTE: Not defined for GPU matrices."
+   NOTE: Not implemented for GPU matrices."
   (fn [src & rest] (general-mat-type src)))
 
 (defmethod approx-poly-dp :java-mat
@@ -1270,7 +1348,7 @@
    along the points. Input is
    [src closed?]
 
-   NOTE: Not defined for GPU matrices."
+   NOTE: Not implemented for GPU matrices."
   (fn [src & rest] (general-mat-type src)))
 
 (defmethod arc-length :java-mat
@@ -1286,7 +1364,7 @@
   (cv2/arcLength src closed?))
 
 
-(defmulti arrowed-line
+(defmulti arrowed-line!
   "Based on Imgproc/arrowedLine
    -----------------------------------------------------------------------
    Draws an arrowed line onto a matrix and returns the matrix. thickness is an integer
@@ -1300,7 +1378,7 @@
    NOTE: Not implemented for GPU matrices."
   (fn [src & rest] (mat-type src)))
 
-(defmethod arrowed-line :java-mat
+(defmethod arrowed-line! :java-mat
   [^Mat src {x1 :x y1 :y} {x2 :x y2 :y} color &
    {:keys [thickness line-type tip-length]
     :or {thickness 1 line-type LINE_8 tip-length 0.1}}]
@@ -1308,7 +1386,7 @@
                        line-type 0 tip-length)
   src)
 
-(defmethod-py arrowed-line :ndarray
+(defmethod-py arrowed-line! :ndarray
   [src {x1 :x y1 :y} {x2 :x y2 :y} color &
    {:keys [thickness line-type tip-length]
     :or {thickness 1 line-type LINE_8 tip-length 0.1}}]
@@ -1333,7 +1411,7 @@
   [src1 src2 & {:keys [dst mask]}]
   (cv2/bitwise_and src1 src2 dst mask))
 
-(defmethod-cuda bitwise-and :cuda-gpu-mat
+(defmethod-cuda bitwise-and :gpu-mat
   [src1 src2 & {:keys [dst mask]}]
   (cuda/bitwise_and src1 src2 dst mask))
 
@@ -1360,7 +1438,7 @@
   [src & {:keys [dst mask]}]
   (cv2/bitwise_not src dst mask))
 
-(defmethod-cuda bitwise-not :cuda-gpu-mat
+(defmethod-cuda bitwise-not :gpu-mat
   [src & {:keys [dst mask]}]
   (cuda/bitwise_not src dst mask))
 
@@ -1389,7 +1467,7 @@
   [src1 src2 & {:keys [dst mask]}]
   (cv2/bitwise_or src1 src2 dst mask))
 
-(defmethod-cuda bitwise-or :cuda-gpu-mat
+(defmethod-cuda bitwise-or :gpu-mat
   [src1 src2 & {:keys [dst mask]}]
   (cuda/bitwise_or src1 src2 dst mask))
 
@@ -1418,7 +1496,7 @@
   [src1 src2 & {:keys [dst mask]}]
   (cv2/bitwise_xor src1 src2 dst mask))
 
-(defmethod-cuda bitwise-xor :cuda-gpu-mat
+(defmethod-cuda bitwise-xor :gpu-mat
   [src1 src2 & {:keys [dst mask]}]
   (cuda/bitwise_xor src1 src2 dst mask))
 
@@ -1435,9 +1513,9 @@
    from min-value (inclusive) to max-value (exclusive). Input is
    [src bin-count [min-value max-value] {:mask :dst}]
 
-   Output is a size [1 bin-count] float matrix.
+   Output is a size {:width 1 :height bin-count} float matrix.
 
-   NOTE: Currently not defined for gpu mats."
+   NOTE: Not implemented for GPU matrices."
   (fn [src & rest] (mat-type src)))
 
 (defmethod calc-hist :java-mat
@@ -1466,7 +1544,7 @@
    [src1 bin-count1 [min-value1 max-value1] src2 bin-count2 [min-value2 max-value2]
     {:mask :dst}]
 
-   Output is a size [bin-count2 bin-count1] float matrix.
+   Output is a size {:width bin-count2 :height bin-count1} float matrix.
 
    NOTE: Currently not defined for gpu mats."
   (fn [src1 & rest] (mat-type src1)))
@@ -1515,7 +1593,7 @@
                                 :or {L2gradient false}}]
   (cv2/Canny src threshold1 threshold2 dst apertureSize L2gradient))
 
-(defmethod-cuda canny :cuda-gpu-mat
+(defmethod-cuda canny :gpu-mat
   [src threshold1 threshold2 & {:keys [apertureSize L2gradient dst]
                                 :or {L2gradient false}}]
   (let [detector (cuda/createCannyEdgeDetector threshold1 threshold2
@@ -1554,7 +1632,7 @@
   (let [[magnitude angle] (cv2/cartToPolar src-x src-y magnitude angle degrees?)]
     [angle magnitude]))
 
-(defmethod-cuda cart-to-polar :cuda-gpu-mat
+(defmethod-cuda cart-to-polar :gpu-mat
   [src-x src-y & {:keys [angle magnitude degrees?] :or {degrees? true}}]
   (let [[magnitude angle] (cuda/cartToPolar src-x src-y magnitude angle degrees?)]
     [angle magnitude]))
@@ -1571,11 +1649,11 @@
     1
     (nth (np-shape src) 2)))
 
-(defmethod-cuda channels :cuda-gpu-mat [src]
+(defmethod-cuda channels :gpu-mat [src]
       (py/$a src channels))
 
 
-(defmulti circle
+(defmulti circle!
   "Based on Imgproc/circle
    -----------------------------------------------------------------------
    Draws a circle onto a matrix and returns the matrix. thickness is an integer and
@@ -1588,16 +1666,55 @@
    NOTE: Not implemented for GPU matrices."
   (fn [src & rest] (mat-type src)))
 
-(defmethod circle :java-mat
+(defmethod circle! :java-mat
   [^Mat src {x :x y :y} radius color &
    {:keys [thickness line-type] :or {thickness 1 line-type LINE_8}}]
   (Imgproc/circle src (Point. x y) radius (java-scalar color) thickness line-type)
   src)
 
-(defmethod-py circle :ndarray
+(defmethod-py circle! :ndarray
   [src {x :x y :y} radius color &
    {:keys [thickness line-type] :or {thickness 1 line-type LINE_8}}]
   (cv2/circle src [x y] radius (python-scalar color) thickness line-type))
+
+
+(defmulti compare
+  "Based on Core/compare
+   -----------------------------------------------------------------------
+   Performs a per-element comparison between two matrices src1 and src2, which
+   should be the same size, or between one matrix src1 and a scalar value.
+   Returns a matrix of depth 8U who values is 255 when the comparison is true.
+   The comparison is determined by the optional argument comp-type. The default
+   comp-type is CMP_EQ, equality. Input is
+   [src1 src2 {:dst :comp-type}]"
+  (fn [src1 & rest] (mat-type src1)))
+
+(defmethod compare :java-mat
+  [^Mat src1 src2 & {:keys [comp-type dst] :or {comp-type CMP_EQ}}]
+  (let [^Mat dst (or dst (Mat.))]
+    (Core/compare src1 (java-scalar src2) dst comp-type)
+    dst))
+
+(defmethod-py compare :ndarray
+  [src1 src2 & {:keys [comp-type dst] :or {comp-type CMP_EQ}}]
+  (cv2/compare src1 (python-scalar src2) comp-type dst))
+
+;;comparing a scalar to a cuda-gpu-mat is currently unsupported,
+;;so we have to make a new cuda-gpu-mat containing the scalar value.
+(defmethod-cuda compare :gpu-mat
+  [src1 src2 & {:keys [comp-type dst] :or {comp-type CMP_EQ}}]
+  (if (or (number? src2) (vector? src2))
+    (cuda/compare
+     src1
+     (cv2/cuda_GpuMat (gpu-size src1) (py/$a src1 type) (python-scalar src2))
+     comp-type dst)
+    (cuda/compare src1 src2 comp-type dst)))
+
+(defn compare!
+  "Variant of compare in which src1 is also the destination matrix dst. 
+   src1 should be of depth 8U."
+  [src1 & rest]
+  (apply compare src1 (concat rest [:dst src1])))
 
 
 (defmulti compare-hist
@@ -1630,7 +1747,7 @@
    where labels is a 32S image of the same size as src with a label assigned to each
    point, stats is a label-indexed sequence of items of the form
    {:label label :region region :area area}, and centroids is a label-indexed
-   sequence of the form {:label label :centroid [x y]}.
+   sequence of the form {:label label :centroid {:x x :y y}}.
 
    NOTE: Not currently implemented for gpu mats."
   (fn [src & rest] (mat-type src)))
@@ -1653,8 +1770,8 @@
          (range (.height stats)))
     (map (fn [label]
            {:label label
-            :centroid [(poll-pixel centroids 0 label CV_64F 1)
-                       (poll-pixel centroids 1 label CV_64F 1)]})
+            :centroid {:x (poll-pixel centroids 0 label CV_64F 1)
+                       :y (poll-pixel centroids 1 label CV_64F 1)}})
          (range (.height centroids)))]))
 
 (defmethod-py connected-components-with-stats :ndarray
@@ -1674,8 +1791,8 @@
           label-seq)
      (map (fn [label]
             {:label label
-             :centroid [(py/get-item centroids [label 0])
-                        (py/get-item centroids [label 1])]})
+             :centroid {:x (py/get-item centroids [label 0])
+                        :y (py/get-item centroids [label 1])}})
           label-seq)]))
 
 
@@ -1709,7 +1826,7 @@
           (cv2/multiply (python-scalar alpha) dst)
           (cv2/add (python-scalar beta) dst)))))
 
-(defmethod-cuda convert-to :cuda-gpu-mat
+(defmethod-cuda convert-to :gpu-mat
   [src dst-type & {:keys [alpha beta dst] :or {alpha 1 beta 0}}]
   (let [dst (or dst (cv2/cuda_GpuMat (gpu-size src) dst-type))]
     (py/$a src convertTo dst-type alpha dst beta)))
@@ -1742,7 +1859,7 @@
   [src & {:keys [mask dst]}]
   (cv2/copyTo src mask dst))
 
-(defmethod-cuda copy :cuda-gpu-mat
+(defmethod-cuda copy :gpu-mat
   [src & {:keys [mask dst]}]
   (let [dst (or dst (cv2/cuda_GpuMat (py/$a src size) (py/$a src type)))]
     (py/$a src copyTo dst mask)))
@@ -1772,7 +1889,7 @@
   [src top bottom left right border-type & {:keys [value dst]}]
   (cv2/copyMakeBorder src top bottom left right border-type dst (python-scalar value)))
 
-(defmethod-cuda copy-make-border :cuda-gpu-mat
+(defmethod-cuda copy-make-border :gpu-mat
   [src top bottom left right border-type & {:keys [value dst]}]
   (cuda/copyMakeBorder src top bottom left right border-type dst (python-scalar value)))
 
@@ -1792,7 +1909,7 @@
   [src]
   (cv2/countNonZero src))
 
-(defmethod-cuda count-non-zero :cuda-gpu-mat
+(defmethod-cuda count-non-zero :gpu-mat
   [src]
   (cuda/countNonZero src))
 
@@ -1854,7 +1971,7 @@
            table-type
            (convert-to table-type))})
 
-(defmethod-cuda create-lookup-table :cuda-gpu-mat
+(defmethod-cuda create-lookup-table :gpu-mat
   [_ data & {:keys [max-input max-output G R table-type]}]
   {:max-input max-input :max-output max-output
    :channels (or (and G R 3) 1)
@@ -1868,7 +1985,7 @@
 
 (defmethod create-lookup-table :default
   [& args]
-  (apply create-lookup-table (new-java-mat [1 1] CV_8UC1) args))
+  (apply create-lookup-table (new-java-mat) args))
 
 
 (defmulti cvt-color
@@ -1889,7 +2006,7 @@
   [src code & {:keys [dst]}]
   (cv2/cvtColor src code dst))
 
-(defmethod-cuda cvt-color :cuda-gpu-mat
+(defmethod-cuda cvt-color :gpu-mat
   [src code & {:keys [dst]}]
   (cuda/cvtColor src code dst))
 
@@ -1914,7 +2031,7 @@
   [src]
   (-> (py/get-attr src :dtype) str dtype->depth))
 
-(defmethod-cuda depth :cuda-gpu-mat
+(defmethod-cuda depth :gpu-mat
   [src]
   (py/$a src depth))
 
@@ -1931,7 +2048,7 @@
   [src]
   (-> (py/get-attr src :dtype) str dtype->depth depth->symbol))
 
-(defmethod-cuda depth-symbol :cuda-gpu-mat
+(defmethod-cuda depth-symbol :gpu-mat
   [src]
   (depth->symbol (py/$a src depth)))
 
@@ -1958,17 +2075,17 @@
   "Based on Imgproc/dilate
    -----------------------------------------------------------------------
    Performs an dilation morphological transformation on the source matrix, using
-   a kernel with the specified [k-width k-height] size.
+   a kernel with the specified {:width k-width :height k-height} size.
    Input is
-   [src [k-width k-height] {:dst :iterations :border-type :border-value}]
+   [src {:width k-width :height k-height} {:dst :iterations :border-type :border-value}]
 
    NOTE: border-type and border-value are not used for gpu matrices."
   (fn [src & rest] (mat-type src)))
 
 (defmethod dilate :java-mat
-  [^Mat src [k-width k-height] & {:keys [dst iterations border-type border-value]
-                                  :or {iterations 1 border-type BORDER_DEFAULT
-                                       border-value (Scalar. 0 0 0 0)}}]
+  [^Mat src {k-width :width k-height :height} & {:keys [dst iterations border-type border-value]
+                                                 :or {iterations 1 border-type BORDER_DEFAULT
+                                                      border-value (Scalar. 0 0 0 0)}}]
   (let [dst (or dst (Mat.))]
     (Imgproc/dilate
      src dst
@@ -1977,17 +2094,17 @@
     dst))
 
 (defmethod-py dilate :ndarray
-  [src size & {:keys [dst iterations border-type border-value]
-               :or {iterations 1 border-type BORDER_DEFAULT
-                    border-value (Scalar. 0 0 0 0)}}]
-  (cv2/dilate src (np/ones size np/uint8) dst -1 iterations border-type
+  [src {k-width :width k-height :height} & {:keys [dst iterations border-type border-value]
+                                            :or {iterations 1 border-type BORDER_DEFAULT
+                                                 border-value (Scalar. 0 0 0 0)}}]
+  (cv2/dilate src (np/ones [k-height k-width] np/uint8) dst -1 iterations border-type
              border-value))
 
-(defmethod-cuda dilate :cuda-gpu-mat
-  [src size & {:keys [dst iterations border-type border-value]
-                  :or {iterations 1}}]
+(defmethod-cuda dilate :gpu-mat
+  [src {k-width :width k-height :height} & {:keys [dst iterations border-type border-value]
+                                            :or {iterations 1}}]
   (let [f (cuda/createMorphologyFilter
-           MORPH_DILATE (py/$a src type) (np/ones size np/uint8) nil iterations)
+           MORPH_DILATE (py/$a src type) (np/ones [k-height k-width] np/uint8) nil iterations)
         dst (or dst (new-mat src))]
     (py/$a f apply src dst)
     dst))
@@ -2018,7 +2135,7 @@
 
 ;;Dividing a cuda-gpu-mat by a scalar is currently unsupported,
 ;;so we have to make a new cuda-gpu-mat containing the scalar value.
-(defmethod-cuda divide :cuda-gpu-mat
+(defmethod-cuda divide :gpu-mat
   [src1 src2 & {:keys [dst]}]
    (if (or (number? src2) (vector? src2))
      (cuda/divide
@@ -2037,17 +2154,17 @@
   "Based on Imgproc/erode
    -----------------------------------------------------------------------
    Performs an erosion morphological transformation on the source matrix, using
-   a kernel with the specified [k-width k-height] size.
+   a kernel with the specified {:width k-width :height k-height} size.
    Input is
-   [src [k-width k-height] {:dst :iterations :border-type :border-value}]
+   [src {:width k-width :height k-height} {:dst :iterations :border-type :border-value}]
 
    NOTE: border-type and border-value are not used for gpu matrices."
   (fn [src & rest] (mat-type src)))
 
 (defmethod erode :java-mat
-  [^Mat src [k-width k-height] & {:keys [dst iterations border-type border-value]
-                                  :or {iterations 1 border-type BORDER_DEFAULT
-                                       border-value (Scalar. 0 0 0 0)}}]
+  [^Mat src {k-width :width k-height :height} & {:keys [dst iterations border-type border-value]
+                                                 :or {iterations 1 border-type BORDER_DEFAULT
+                                                      border-value (Scalar. 0 0 0 0)}}]
   (let [dst (or dst (Mat.))]
     (Imgproc/erode
      src dst
@@ -2056,17 +2173,17 @@
     dst))
 
 (defmethod-py erode :ndarray
-  [src size & {:keys [dst iterations border-type border-value]
-               :or {iterations 1 border-type BORDER_DEFAULT
-                    border-value (Scalar. 0 0 0 0)}}]
-  (cv2/erode src (np/ones size np/uint8) dst -1 iterations border-type
+  [src {k-width :width k-height :height} & {:keys [dst iterations border-type border-value]
+                                            :or {iterations 1 border-type BORDER_DEFAULT
+                                                 border-value (Scalar. 0 0 0 0)}}]
+  (cv2/erode src (np/ones [k-height k-width] np/uint8) dst -1 iterations border-type
              border-value))
 
-(defmethod-cuda erode :cuda-gpu-mat
-  [src size & {:keys [dst iterations border-type border-value]
-                  :or {iterations 1}}]
+(defmethod-cuda erode :gpu-mat
+  [src {k-width :width k-height :height} & {:keys [dst iterations border-type border-value]
+                                            :or {iterations 1}}]
   (let [f (cuda/createMorphologyFilter
-           MORPH_ERODE (py/$a src type) (np/ones size np/uint8) nil iterations)
+           MORPH_ERODE (py/$a src type) (np/ones [k-height k-width] np/uint8) nil iterations)
         dst (or dst (new-mat src))]
     (py/$a f apply src dst)
     dst))
@@ -2094,7 +2211,7 @@
   [src & {:keys [dst]}]
   (cv2/exp src dst))
 
-(defmethod-cuda exp :cuda-gpu-mat
+(defmethod-cuda exp :gpu-mat
   [src & {:keys [dst]}]
   (cuda/exp src dst))
 
@@ -2147,7 +2264,7 @@
                            :or {dst-type -1 delta 0 border-type BORDER_DEFAULT}}]
   (cv2/filter2D src dst-type kernel dst nil delta border-type))
 
-(defmethod-cuda filter-2D :cuda-gpu-mat
+(defmethod-cuda filter-2D :gpu-mat
   [src kernel & {:keys [dst dst-type delta border-type]
                            :or {dst-type -1 delta 0 border-type BORDER_DEFAULT}}]
   (let [kernel (->numpy kernel)
@@ -2165,6 +2282,33 @@
   "Variant of filter-2D in which src is also the destination matrix dst."
   [src & rest]
   (apply filter-2D src (concat rest [:dst src])))
+
+
+(defmulti find-contours
+  "Based on Imgproc/find-contours
+   -----------------------------------------------------------------------
+   Finds the closed contours in an image. Returns a mask with 255 at all 
+   locations where a contour was found and 0 everywhere else. Unlike 
+   find-segments-by-contour, this function does not fill in contours.Input is
+   [src]
+   
+   NOTE: Not currently implemented for gpu mats."
+  (fn [src & rest] (mat-type src)))
+
+(defmethod find-contours :java-mat
+  [^Mat src]
+  (let [contours (ArrayList.)
+        hierarchy (Mat.)
+        dst (zeros src :type CV_8UC1)]
+    (Imgproc/findContours src contours hierarchy RETR_EXTERNAL Imgproc/CHAIN_APPROX_NONE)
+    (Imgproc/drawContours dst contours -1 (Scalar. 255 255 255) 0)
+    dst))
+
+(defmethod-py find-contours :ndarray
+  [src]
+  (let [[contours hierarchy] (vec (cv2/findContours src RETR_EXTERNAL Imgproc/CHAIN_APPROX_NONE))
+        dst (zeros src :type CV_8UC1)]
+    (cv2/drawContours dst contours -1 [255 255 255] 0)))
 
 
 (declare in-range)
@@ -2264,7 +2408,7 @@
   [src flipCode & {:keys [dst]}]
   (cv2/flip src flipCode dst))
 
-(defmethod-cuda flip :cuda-gpu-mat
+(defmethod-cuda flip :gpu-mat
   [src flipCode & {:keys [dst]}]
   (cuda/flip src flipCode dst))
 
@@ -2277,32 +2421,32 @@
 (defmulti gaussian-blur
   "Based on Imgproc/GaussianBlur
    -----------------------------------------------------------------------
-   Blurs a matrix by convolving it with a Gaussian. Kernel size is a [width
-   height] vector, where width and height should be odd. The derivative of the
+   Blurs a matrix by convolving it with a Gaussian. Kernel size is a {:width w
+   :height h} vector, where width and height should be odd. The derivative of the
    Gaussian is determined automatically, unless sigma is provided. Input is
    [src ksize {:border-type :dst}]"
   (fn [src & rest] (mat-type src)))
 
 (defmethod gaussian-blur :java-mat
-  [^Mat src [kwidth kheight] & {:keys [border-type dst sigma]
-                                :or {border-type BORDER_DEFAULT sigma 0}}]
+  [^Mat src {kwidth :width kheight :height} & {:keys [border-type dst sigma]
+                                               :or {border-type BORDER_DEFAULT sigma 0}}]
    (let [dst (or dst (Mat.))]
      (Imgproc/GaussianBlur src dst (Size. kwidth kheight) sigma sigma border-type)
      dst))
 
 (defmethod-py gaussian-blur :ndarray
-  [src ksize & {:keys [border-type dst sigma]
-                :or {border-type BORDER_DEFAULT sigma 0}}]
-  (cv2/GaussianBlur src ksize 0 dst 0 border-type))
+  [src {kwidth :width kheight :height} & {:keys [border-type dst sigma]
+                                          :or {border-type BORDER_DEFAULT sigma 0}}]
+  (cv2/GaussianBlur src [kheight kwidth] 0 dst 0 border-type))
 
-(defmethod-cuda gaussian-blur :cuda-gpu-mat
-  [src ksize & {:keys [border-type dst sigma]
-                :or {border-type BORDER_DEFAULT sigma 0}}]
+(defmethod-cuda gaussian-blur :gpu-mat
+  [src {kwidth :width kheight :height} & {:keys [border-type dst sigma]
+                                          :or {border-type BORDER_DEFAULT sigma 0}}]
   (let [dtype (py/$a src type)
         ;dst (or dst (cv2/cuda_GpuMat (gpu-size src) dtype))
         dst (or dst (new-mat src))
         gfilter
-        (cuda/createGaussianFilter dtype dtype ksize sigma sigma
+        (cuda/createGaussianFilter dtype dtype [kwidth kheight] sigma sigma
                                    border-type border-type)]
     (py/$a gfilter apply src dst)
     dst))
@@ -2335,7 +2479,7 @@
   [src1 src2 & {:keys [dst alpha src3 beta] :or {alpha 1.0 beta 1.0}}]
   (cv2/gemm src1 src2 alpha src3 beta dst))
 
-(defmethod-cuda gemm :cuda-gpu-mat ;;<-----Test
+(defmethod-cuda gemm :gpu-mat ;;<-----Test
   [src1 src2 & {:keys [dst alpha src3 beta] :or {alpha 1.0 beta 1.0}}]
   (cuda/gemm src1 src2 alpha src3 beta dst))
 
@@ -2385,7 +2529,7 @@
    optional-ref-mat, which can be any matrix, serves as a cue for what type of
    kernel to make, e.g., java-mat vs. numpy array. Or, you can skip this argument
    and a java-mat will be made by default. The other inputs are as follows
-   [width height]: size of the filter
+   {:width w :height h}: size of the filter
    sigma: standard deviation of the Gaussian envelope
    theta: orientation of the normal to the parallel stripes of the Gabor function
    lambd: wavelength of the sinusoidal factor
@@ -2393,28 +2537,28 @@
    psi: phase offset (default is pi/2)
    dst-type: kernel will operate on matrices of this depth (default is 32F, other optins is 64F)
    Input is
-   [optional-ref-mat [width height] sigma theta lambd {:gamma :psi :dst-type}]"
+   [optional-ref-mat {:width w :height h} sigma theta lambd {:gamma :psi :dst-type}]"
   (fn [optional-ref-mat & rest] (mat-type optional-ref-mat)))
 
 (defmethod get-gabor-kernel :java-mat ;;<---test all
-  [_ [width height] sigma theta lambd & {:keys [gamma psi dst-type]
+  [_ {width :width height :height} sigma theta lambd & {:keys [gamma psi dst-type]
                                          :or {gamma 1.0 psi (clojure.core/* Math/PI 0.5)
                                               dst-type CV_32F}}]
   (Imgproc/getGaborKernel (Size. width height) sigma theta lambd gamma psi dst-type))
 
 (defmethod-py get-gabor-kernel :ndarray
-  [_ [width height] sigma theta lambd & {:keys [gamma psi dst-type]
+  [_ {width :width height :height} sigma theta lambd & {:keys [gamma psi dst-type]
                                          :or {gamma 1.0 psi (clojure.core/* Math/PI 0.5)
                                               dst-type CV_32F}}]
   (cv2/getGaborKernel [height width] sigma theta lambd gamma psi dst-type))
 
-(defmethod-cuda get-gabor-kernel :cuda-gpu-mat
+(defmethod-cuda get-gabor-kernel :gpu-mat
   [_ & args]
-  (apply get-gabor-kernel (new-numpy-array [2 2] CV_8UC1) args))
+  (apply get-gabor-kernel (new-numpy-array {:width 2 :height 2} CV_8UC1) args))
 
 (defmethod get-gabor-kernel :default
   [& args]
-  (apply get-gabor-kernel (new-java-mat [1 1] CV_8UC1) args))
+  (apply get-gabor-kernel (new-java-mat) args))
 
 
 (defmulti get-gaussian-kernel
@@ -2441,13 +2585,13 @@
   [_ size & {:keys [dst-type sigma] :or {dst-type CV_32F sigma 0}}]
   (cv2/getGaussianKernel size sigma dst-type))
 
-(defmethod-cuda get-gaussian-kernel :cuda-gpu-mat
+(defmethod-cuda get-gaussian-kernel :gpu-mat
   [_ & args]
   (apply get-gaussian-kernel (new-numpy-array [2 2] CV_8UC1) args))
 
 (defmethod get-gaussian-kernel :default
   [& args]
-  (apply get-gaussian-kernel (new-java-mat [1 1] CV_8UC1) args))
+  (apply get-gaussian-kernel (new-java-mat) args))
 
 
 (defmulti get-value
@@ -2460,7 +2604,7 @@
    [src x y]
    [src {:x x :y y}]
 
-   NOTE: Not currently implemented for GPU matrices."
+   NOTE: Not implemented for GPU matrices."
   (fn [src & rest] (mat-type src)))
 
 (defmethod get-value :java-mat
@@ -2486,7 +2630,7 @@
    rows, and concatenates them horizontally.  Input is
    [src-1 src-2 ...]
 
-   NOTE: Not currently implemented for gpu mats."
+   NOTE: Not implemented for GPU matrices."
   (fn [& sources] (mat-type (first sources))))
 
 (defmethod hconcat :java-mat
@@ -2499,6 +2643,22 @@
   [& sources]
   (cv2/hconcat sources))
 
+(defn im-read
+  "Based on Imgcodecs/imread
+   -----------------------------------------------------------------------
+   Reads in an image file from the specified path and produces a java matrix.
+   If the image is in color, then the resulting image with be in BGR. Alternatively,
+   use im-read->numpy to produce a numpy array. Input is
+   [path]"
+  [path]
+  (Imgcodecs/imread path))
+
+(wp
+ (defn im-read->numpy
+   "This variant of im-read produces a numpy array from a file. Input is
+   [path]"
+   [path]
+   (cv2/imread path)))
 
 (defmulti kmeans
   "Based on Core/kmeans
@@ -2521,7 +2681,7 @@
    Input is
    [src k max-iterations epsilon attempts {:dst :flags :return-centers?}]
 
-   NOTE: Not currently implemented for gpu mats or numpy arrays"
+   NOTE: Not implemented for GPU matrices or numpy arrays."
   (fn [src & rest] (mat-type src)))
 
 (defmethod kmeans :java-mat
@@ -2561,7 +2721,7 @@
   [src lowerb upperb & {:keys [dst]}]
   (cv2/inRange src (python-scalar lowerb) (python-scalar upperb) dst))
 
-(defmethod-cuda in-range :cuda-gpu-mat
+(defmethod-cuda in-range :gpu-mat
   [src lowerb upperb & {:keys [dst]}]
   (cuda/inRange src (python-scalar lowerb) (python-scalar upperb) dst))
 
@@ -2592,7 +2752,7 @@
   (cv2/insertChannel src dst channel))
 
 
-(defmulti line
+(defmulti line!
   "Based on Imgproc/line
    -----------------------------------------------------------------------
    Draws a line onto a matrix and returns the matrix. thickness is an integer and
@@ -2604,14 +2764,14 @@
    NOTE: Not implemented for GPU matrices."
   (fn [src & rest] (mat-type src)))
 
-(defmethod line :java-mat
+(defmethod line! :java-mat
   [^Mat src {x1 :x y1 :y} {x2 :x y2 :y} color &
    {:keys [thickness line-type] :or {thickness 1 line-type LINE_8}}]
   (Imgproc/line src (Point. x1 y1) (Point. x2 y2) (java-scalar color) thickness
                 line-type)
   src)
 
-(defmethod-py line :ndarray
+(defmethod-py line! :ndarray
   [src {x1 :x y1 :y} {x2 :x y2 :y} color &
    {:keys [thickness line-type] :or {thickness 1 line-type LINE_8}}]
   (cv2/line src [x1 y1] [x2 y2] (python-scalar color) thickness line-type))
@@ -2634,7 +2794,7 @@
   [src & {:keys [dst]}]
   (cv2/log src dst))
 
-(defmethod-cuda log :cuda-gpu-mat
+(defmethod-cuda log :gpu-mat
   [src & {:keys [dst]}]
   (cuda/log src dst))
 
@@ -2662,7 +2822,7 @@
   [src1 src2 & {:keys [dst]}]
   (cv2/magnitude src1 src2 dst))
 
-(defmethod-cuda magnitude :cuda-gpu-mat
+(defmethod-cuda magnitude :gpu-mat
   [src1 src2 & {:keys [dst]}]
   (cuda/magnitude src1 src2 dst))
 
@@ -2690,7 +2850,7 @@
   [src1 src2 & {:keys [dst]}]
   (cv2/max src1 (python-scalar src2) dst))
 
-(defmethod-cuda max :cuda-gpu-mat
+(defmethod-cuda max :gpu-mat
   [src1 src2 & {:keys [dst]}]
   (cuda/max src1 (python-scalar src2) dst))
 
@@ -2779,7 +2939,7 @@
   [& sources]
   (cv2/merge sources))
 
-(defmethod-cuda merge :cuda-gpu-mat
+(defmethod-cuda merge :gpu-mat
   [& sources]
   (let [src (first sources)
         dst (cv2/cuda_GpuMat
@@ -2806,7 +2966,7 @@
   [src1 src2 & {:keys [dst]}]
   (cv2/min src1 (python-scalar src2) dst))
 
-(defmethod-cuda min :cuda-gpu-mat
+(defmethod-cuda min :gpu-mat
   [src1 src2 & {:keys [dst]}]
   (cuda/min src1 (python-scalar src2) dst))
 
@@ -2824,7 +2984,7 @@
    {:angle angle :center {:x x :y y} :width width :height height}. Input is
    [src]
 
-   NOTE: Not defined for GPU matrices."
+   NOTE: Not implemented for GPU matrices."
   (fn [src & rest] (general-mat-type src)))
 
 (defmethod min-area-rect :java-mat
@@ -2854,7 +3014,7 @@
    Returns
    {:min-loc :min-val :max-loc :max-val}
 
-   NOTE: Not currently implemented for GPU matrices."
+   NOTE: Not implemented for GPU matrices."
   (fn [src & rest] (mat-type src)))
 
 (defmethod min-max-loc :java-mat
@@ -2927,79 +3087,21 @@
   (cv2/mixChannels srcs dsts from-to)
   (first dsts))
 
-
-(defmulti non-zero-bounds
-  "Based on Core/findNonZero
-   -----------------------------------------------------------------------
-   Returns a {:x x :y y :width w :height h} region describing the bounds of all
-   non-zero elements in a binary matrix of type CV_8UC1 (typically a mask created
-   by in-range, etc). Input is
-   [src]
-
-   NOTE: Not implemented for GPU matrices."
-  (fn [src & rest] (mat-type src)))
-
-(defmethod non-zero-bounds :java-mat
-  [^Mat src]
-  (let [pts (MatOfPoint.)]
-    (Core/findNonZero src pts)
-    (let [rect ^Rect (Imgproc/boundingRect pts)]
-      {:x (.x rect) :y (.y rect) :width (.width rect) :height (.height rect)})))
-
-(defmethod-py non-zero-bounds :ndarray ;;<---Test
-  [src]
-  (let [[x y w h] (-> (cv2/findNonZero src) cv2/boundingRect vec)]
-    {:x x :y y :width w :height h}))
-
-
-(defmulti normalize
-  "Based on Core/normalize
-   -----------------------------------------------------------------------
-   Performs a normalizing operation on src. If the norm type is NORM_MINMAX, then
-   alpha is the min and beta is the max. If the norm type is NORM_L1 or NORM_L2,
-   then alpha is the value we're normalizing to.
-   If dst isn't provided, then dst-type can be provided to specify the desired
-   depth for the output. Input is
-   [src alpha beta norm-type {:dst :dst-type :mask}]"
-  (fn [src & rest] (mat-type src)))
-
-(defmethod normalize :java-mat
-  [^Mat src alpha beta norm-type & {:keys [dst dst-type mask] :or {dst-type -1}}]
-  (let [dst (or dst (Mat.))]
-    (if mask
-      (Core/normalize src dst alpha beta norm-type dst-type mask)
-      (Core/normalize src dst alpha beta norm-type dst-type))
-    dst))
-
-(defmethod-py normalize :ndarray
-  [src alpha beta norm-type & {:keys [dst dst-type mask] :or {dst-type -1}}]
-  (cv2/normalize src dst alpha beta norm-type dst-type mask))
-
-(defmethod-cuda normalize :cuda-gpu-mat
-  [src alpha beta norm-type & {:keys [dst dst-type mask] :or {dst-type (py/$a src type)}}]
-  (cuda/normalize src alpha beta norm-type dst-type dst mask))
-
-(defn normalize!
-  "Variant of normalize in which src is also the destination matrix dst."
-  [src & rest]
-  (apply normalize src (concat rest [:dst src])))
-
-
 (defmulti morphology-ex
   "Based on Imgproc/morphologyEx
    -----------------------------------------------------------------------
    Performs the specified morphological transformation on the source matrix,
-   (e.g., MORPH_OPEN), using a kernel with the specified [k-width k-height] size.
+   (e.g., MORPH_OPEN), using a kernel with the specified {:width k-width :height k-height} size.
    Input is
-   [src op [k-width k-height] {:dst :iterations :border-type :border-value}]
+   [src op {:width k-width :height k-height} {:dst :iterations :border-type :border-value}]
 
    NOTE: border-type and border-value are not used for gpu matrices."
   (fn [src & rest] (mat-type src)))
 
 (defmethod morphology-ex :java-mat
-  [^Mat src op [k-width k-height] & {:keys [dst iterations border-type border-value]
-                                     :or {iterations 1 border-type BORDER_DEFAULT
-                                          border-value (Scalar. 0 0 0 0)}}]
+  [^Mat src op {k-width :width k-height :height} & {:keys [dst iterations border-type border-value]
+                                                    :or {iterations 1 border-type BORDER_DEFAULT
+                                                         border-value (Scalar. 0 0 0 0)}}]
   (let [dst (or dst (Mat.))]
     (Imgproc/morphologyEx
      src dst op
@@ -3008,17 +3110,17 @@
     dst))
 
 (defmethod-py morphology-ex :ndarray
-  [src op size & {:keys [dst iterations border-type border-value]
-                                     :or {iterations 1 border-type BORDER_DEFAULT
-                                          border-value (Scalar. 0 0 0 0)}}]
-  (cv2/morphologyEx src op (np/ones size np/uint8) dst -1 iterations border-type
+  [src op {k-width :width k-height :height} & {:keys [dst iterations border-type border-value]
+                                               :or {iterations 1 border-type BORDER_DEFAULT
+                                                    border-value (Scalar. 0 0 0 0)}}]
+  (cv2/morphologyEx src op (np/ones [k-height k-width] np/uint8) dst -1 iterations border-type
                     border-value))
 
-(defmethod-cuda morphology-ex :cuda-gpu-mat
-  [src op size & {:keys [dst iterations border-type border-value]
-                                     :or {iterations 1}}]
+(defmethod-cuda morphology-ex :gpu-mat
+  [src op {k-width :width k-height :height} & {:keys [dst iterations border-type border-value]
+                                               :or {iterations 1}}]
   (let [f (cuda/createMorphologyFilter
-           op (py/$a src type) (np/ones size np/uint8) nil iterations)
+           op (py/$a src type) (np/ones [k-height k-width] np/uint8) nil iterations)
         dst (or dst (new-mat src))]
     (py/$a f apply src dst)
     dst))
@@ -3049,7 +3151,7 @@
 
 ;;Multiplying a cuda-gpu-mat by a scalar is currently unsupported,
 ;;so we have to make a new cuda-gpu-mat containing the scalar value.
-(defmethod-cuda multiply :cuda-gpu-mat
+(defmethod-cuda multiply :gpu-mat
   [src1 src2 & {:keys [dst]}]
    (if (or (number? src2) (vector? src2))
      (cuda/multiply
@@ -3064,6 +3166,87 @@
   (apply multiply src1 (concat rest [:dst src1])))
 
 
+(defmulti non-zero-bounds
+  "Based on Core/findNonZero
+   -----------------------------------------------------------------------
+   Returns a {:x x :y y :width w :height h} region describing the bounds of all
+   non-zero elements in a binary matrix of type CV_8UC1 (typically a mask created
+   by in-range, etc). Input is
+   [src]
+
+   NOTE: Not implemented for GPU matrices."
+  (fn [src & rest] (mat-type src)))
+
+(defmethod non-zero-bounds :java-mat
+  [^Mat src]
+  (let [pts (MatOfPoint.)]
+    (Core/findNonZero src pts)
+    (let [rect ^Rect (Imgproc/boundingRect pts)]
+      {:x (.x rect) :y (.y rect) :width (.width rect) :height (.height rect)})))
+
+(defmethod-py non-zero-bounds :ndarray
+  [src]
+  (let [[x y w h] (-> (cv2/findNonZero src) cv2/boundingRect vec)]
+    {:x x :y y :width w :height h}))
+
+
+(defmulti non-zero-points
+  "Based on Core/findNonZero
+   -----------------------------------------------------------------------
+   Returns a list of {:x x :y y} points describing the locations of all
+   non-zero elements in a binary matrix of type CV_8UC1 (typically a mask created
+   by in-range, etc). Input is
+   [src]
+
+   NOTE: Not implemented for GPU matrices."
+  (fn [src & rest] (mat-type src)))
+
+(defmethod non-zero-points :java-mat
+  [^Mat src]
+  (let [pts (MatOfPoint.)]
+    (Core/findNonZero src pts)
+    (->> pts (#(.toList %)) seq 
+        (map (fn [^Point pt] {:x (int (.x pt)) :y (int (.y pt))})))))
+
+(defmethod-py non-zero-points :ndarray
+  [src]
+  (let [pts (cv2/findNonZero src)]
+    (->> pts ->seq (map first) (map (fn [[x y]] {:x x :y y})) )))
+
+
+(defmulti normalize
+  "Based on Core/normalize
+   -----------------------------------------------------------------------
+   Performs a normalizing operation on src. If the norm type is NORM_MINMAX, then
+   alpha is the min and beta is the max. If the norm type is NORM_L1 or NORM_L2,
+   then alpha is the value we're normalizing to.
+   If dst isn't provided, then dst-type can be provided to specify the desired
+   depth for the output. Input is
+   [src alpha beta norm-type {:dst :dst-type :mask}]"
+  (fn [src & rest] (mat-type src)))
+
+(defmethod normalize :java-mat
+  [^Mat src alpha beta norm-type & {:keys [dst dst-type mask] :or {dst-type -1}}]
+  (let [dst (or dst (Mat.))]
+    (if mask
+      (Core/normalize src dst alpha beta norm-type dst-type mask)
+      (Core/normalize src dst alpha beta norm-type dst-type))
+    dst))
+
+(defmethod-py normalize :ndarray
+  [src alpha beta norm-type & {:keys [dst dst-type mask] :or {dst-type -1}}]
+  (cv2/normalize src dst alpha beta norm-type dst-type mask))
+
+(defmethod-cuda normalize :gpu-mat
+  [src alpha beta norm-type & {:keys [dst dst-type mask] :or {dst-type (py/$a src type)}}]
+  (cuda/normalize src alpha beta norm-type dst-type dst mask))
+
+(defn normalize!
+  "Variant of normalize in which src is also the destination matrix dst."
+  [src & rest]
+  (apply normalize src (concat rest [:dst src])))
+
+
 (defmulti optical-flow-DIS
   "Based on DISOpticalFlow/create and .calc
    -----------------------------------------------------------------------
@@ -3072,7 +3255,9 @@
    is y-flow.
    Input is
    [src1 src2 {:preset :dst}]
-   where :preset is DIS_FAST, DIS_MEDIUM (default), or DIS_ULTRAFAST"
+   where :preset is DIS_FAST, DIS_MEDIUM (default), or DIS_ULTRAFAST
+   
+   NOTE: Not implemented for GPU matrices or numpy arrays."
   (fn [src1 & rest] (mat-type src1)))
 
 (defmethod optical-flow-DIS :java-mat
@@ -3105,7 +3290,6 @@
      src1 src2 dst pyr_scale levels winsize iterations poly_n poly_sigma flags)
     dst))
 
-
 (defmethod-py optical-flow-farneback :ndarray
   [src1 src2 &
    {:keys [pyr_scale levels winsize iterations poly_n poly_sigma flags dst]
@@ -3114,7 +3298,7 @@
   (cv2/calcOpticalFlowFarneback
    src1 src2 dst pyr_scale levels winsize iterations poly_n poly_sigma flags))
 
-(defmethod-cuda optical-flow-farneback :cuda-gpu-mat
+(defmethod-cuda optical-flow-farneback :gpu-mat
   [src1 src2 &
    {:keys [pyr_scale levels winsize iterations poly_n poly_sigma flags dst]
     :or {pyr_scale 0.75 levels 12 winsize 15 iterations 4 poly_n 7
@@ -3148,7 +3332,7 @@
   (let [[dst-x dst-y] (cv2/polarToCart magnitude angle dst-x dst-y degrees?)]
     [dst-x dst-y]))
 
-(defmethod-cuda polar-to-cart :cuda-gpu-mat
+(defmethod-cuda polar-to-cart :gpu-mat
   [angle magnitude & {:keys [dst-x dst-y degrees?] :or {degrees? true}}]
   (let [[dst-x dst-y] (cuda/polarToCart magnitude angle dst-x dst-y degrees?)]
     [dst-x dst-y]))
@@ -3171,7 +3355,7 @@
   [src power & {:keys [dst]}]
   (cv2/pow src power dst))
 
-(defmethod-cuda pow :cuda-gpu-mat
+(defmethod-cuda pow :gpu-mat
   [src power & {:keys [dst]}]
   (cuda/pow src power dst))
 
@@ -3179,6 +3363,64 @@
   "Variant of pow in which src is also the destination matrix dst."
   [src & rest]
   (apply pow src (concat rest [:dst src])))
+
+
+(defmulti print
+  "Based on .dump (sort of)
+   -----------------------------------------------------------------------
+   Prints a matrix to the repl. Input is
+   [src]"
+  (fn [src] (depth src)))
+
+(defmethod print CV_8U
+  [src]
+  (->> src ->seq
+       (map #(apply str (interpose " " %)))
+       (interpose "\n")
+       (apply str)
+       (#(g/format-number % 0 :min-characters 3))
+       println))
+
+(defmethod print :default
+  [src]
+  (->> src ->seq
+       (map #(apply str (interpose " " %)))
+       (interpose "\n")
+       (apply str)
+       (#(g/format-number % 3 :min-characters 5 :preserve-type? true))
+       println))
+
+
+(defn print-and-return
+  "Based on .dump (sort of)
+   -----------------------------------------------------------------------
+   Prints a matrix to the repl. Also returns the matrix. Input is
+   [src]"
+  [src]
+  (print src)
+  src)
+
+
+(defn pr 
+  "Shorthand for print"
+  [src]
+  (print src))
+
+
+(defmulti push-back!
+  "Based on .push_back
+   -----------------------------------------------------------------------
+   Inserts matrix src into matrix dst, placing it below whatever rows are already
+   present in dst. Either dst and src should have the same width, or dst should be 
+   empty. Unlike most fns, this one takes dst first. Input is 
+   [dst src]
+   
+   NOTE: Not implemented for GPU matrices or numpy arrays."
+  (fn [dst src] (mat-type dst)))
+
+(defmethod push-back! :java-mat 
+  [^Mat dst ^Mat src]
+  (.push_back dst src))
 
 
 (defmulti put-text
@@ -3227,7 +3469,7 @@
 (defmethod pyr-down :java-mat
   [^Mat src & {:keys [dst dst-size border-type]}]
   (let [dst (or dst (Mat.))
-        dst-size (if-let [[w h] dst-size]
+        dst-size (if-let [{w :width h :height} dst-size]
                    (Size. w h) (Size.))]
     (if border-type
       (Imgproc/pyrDown src dst dst-size border-type)
@@ -3236,9 +3478,11 @@
 
 (defmethod-py pyr-down :ndarray ;;<--test, and also cuda version
   [src & {:keys [dst dst-size border-type]}]
-  (cv2/pyrDown src dst dst-size border-type))
+  (let [dst-size (if-let [{w :width h :height} dst-size]
+                  [h w] [])]
+    (cv2/pyrDown src dst dst-size border-type)))
 
-(defmethod-cuda pyr-down :cuda-gpu-mat
+(defmethod-cuda pyr-down :gpu-mat
   [src & {:keys [dst]}]
   (cuda/pyrDown src dst))
 
@@ -3257,7 +3501,7 @@
 (defmethod pyr-up :java-mat
   [^Mat src & {:keys [dst dst-size border-type]}]
   (let [dst (or dst (Mat.))
-        dst-size (if-let [[w h] dst-size]
+        dst-size (if-let [{w :width h :height} dst-size]
                    (Size. w h) (Size.))]
     (if border-type
       (Imgproc/pyrUp src dst dst-size border-type)
@@ -3266,14 +3510,16 @@
 
 (defmethod-py pyr-up :ndarray ;;<--test, and also cuda version
   [src & {:keys [dst dst-size border-type]}]
-  (cv2/pyrUp src dst dst-size border-type))
+  (let [dst-size (if-let [{w :width h :height} dst-size]
+                   [h w] [])]
+    (cv2/pyrUp src dst dst-size border-type)))
 
-(defmethod-cuda pyr-up :cuda-gpu-mat
+(defmethod-cuda pyr-up :gpu-mat
   [src & {:keys [dst]}]
   (cuda/pyrUp src dst))
 
 
-(defmulti rectangle
+(defmulti rectangle!
   "Based on Imgproc/rectangle
    -----------------------------------------------------------------------
    Draws a rectangle onto a matrix and returns the matrix. region is in the form
@@ -3286,17 +3532,17 @@
    NOTE: Not implemented for GPU matrices."
   (fn [src & rest] (mat-type src)))
 
-(defmethod rectangle :java-mat
+(defmethod rectangle! :java-mat
   [^Mat src {x :x y :y :as region} color &
    {:keys [thickness line-type] :or {thickness 1 line-type LINE_8}}]
-  (Imgproc/rectangle src (Rect. x y (reg/width region) (reg/height region))
+  (Imgproc/rectangle src (Rect. x y (geo/width region) (geo/height region))
                      (java-scalar color) thickness line-type)
   src)
 
-(defmethod-py rectangle :ndarray
+(defmethod-py rectangle! :ndarray
   [src {x :x y :y :as region} color &
    {:keys [thickness line-type] :or {thickness 1 line-type LINE_8}}]
-  (cv2/rectangle src [x y] [(reg/max-x region) (reg/max-y region)]
+  (cv2/rectangle src [x y] [(geo/max-x region) (geo/max-y region)]
                  (python-scalar color) thickness line-type))
 
 
@@ -3319,7 +3565,7 @@
   [src dim rtype & {:keys [dst]}]
   (cv2/reduce src dim rtype dst))
 
-(defmethod-cuda reduce :cuda-gpu-mat ;;<----Test
+(defmethod-cuda reduce :gpu-mat ;;<----Test
   [src dim rtype & {:keys [dst]}]
   (cv2/reduce src dim rtype dst))
 
@@ -3327,43 +3573,54 @@
 (defmulti reshape
   "Based on .reshape
    -----------------------------------------------------------------------
-   Reshapes a matrix to a new [with height] size and potentially a new number of
-   channels, while keeping the total number of elements in the matrix constant.
-   If channels is not specified, it will be the same as in the src matrix.
-   Input options are
-   [src [width height]]
-   [src [width height] channels]"
+   Reshapes a matrix to a new {:width w :height h} size and potentially a new number of
+   channels ch, while keeping the total number of elements in the matrix constant.
+   If channels is not specified, it will be the same as in the src matrix. If width
+   is not specified (size contains only :height), it will be inferred.
+   
+   Input is
+   [src size {ch dst}]
+   
+   NOTE: This function only works on continuous matrices. If your matrix was created 
+   via a call to submat, trying calling copy on it first.
+   
+   NOTE: Not implemented for GPU matrices."
   (fn [src & rest] (mat-type src)))
 
 (defmethod reshape :java-mat
-  ([^Mat src [_ height]]
-   (.reshape src (.channels src) height))
-  ([^Mat src [_ height] channels]
-   (.reshape src channels height)))
+  [^Mat src {height :height} & {:keys [ch dst]}]
+  (let [result (.reshape src (or ch (.channels src)) height)]
+    (if dst 
+      (copy result :dst dst)
+      result)))
 
 (defmethod-py reshape :ndarray
-  ([src [width height]]
-   (let [channels (channels src)]
-     (if (> channels 1)
-       (np/reshape src [height width channels])
-       (np/reshape src [height width]))))
-  ([src [width height] channels]
-   (np/reshape src [height width channels])))
+  [src {width :width height :height} & {:keys [ch dst]}]
+  (let [ch (or ch (channels src))
+        width (cond-> width
+                (and height (not width)) (/ (area src) height))
+        result (if (> ch 1)
+                 (np/reshape src [height width ch])
+                 (np/reshape src [height width]))]
+    (if dst 
+      (copy result :dst dst)
+      result)))
 
-(defmethod-cuda reshape :cuda-gpu-mat
-  ([src [_ height]]
-   (py/$a src reshape (py/$a src channels) height))
-  ([src [_ height] channels]
-   (py/$a src reshape channels height)))
+;; This doesn't work because most gpu matrices aren't continuous
+;; (defmethod-cuda reshape :gpu-mat
+;;   ([src {height :height}]
+;;    (py/$a src reshape (py/$a src channels) height))
+;;   ([src {height :height} channels]
+;;    (py/$a src reshape channels height)))
 
 
 (defmulti resize
   "Based on Imgproc/resize
    -----------------------------------------------------------------------
-   Resizes a matrix. Can resize to a target [width height] size or resize by
+   Resizes a matrix. Can resize to a target {:width w :height h} size or resize by
    multiplying src's width and height by a scaling-factor (applying the same scaling
    to both dimensions). Input options are
-  [src [width height] {:interpolation :dst}]
+  [src {:width w :height h} {:interpolation :dst}]
   [src scaling-factor {:interpolation :dst}]
 
   NOTE: src matrix should be of depth CV_32F."
@@ -3373,7 +3630,7 @@
   [^Mat src size & {:keys [interpolation dst]}]
   (let [dst (or dst (Mat.))
         interpolation (or interpolation (default-interp src))
-        [width height] (when (vector? size) size)]
+        {width :width height :height} (if (map? size) size {})]
     (if width
       (Imgproc/resize src dst (Size. width height) 0 0 interpolation)
       (Imgproc/resize src dst (Size.) (double size) (double size) interpolation))
@@ -3381,16 +3638,18 @@
 
 (defmethod-py resize :ndarray
   [src size & {:keys [interpolation dst]}]
-  (let [interpolation (or interpolation (default-interp src))]
-    (if (vector? size)
-      (cv2/resize src size dst 0 0 interpolation)
+  (let [interpolation (or interpolation (default-interp src))
+        {width :width height :height} (if (map? size) size {})]
+    (if width
+      (cv2/resize src [height width] dst 0 0 interpolation)
       (cv2/resize src [0 0] dst size size interpolation))))
 
-(defmethod-cuda resize :cuda-gpu-mat
+(defmethod-cuda resize :gpu-mat
   [src size & {:keys [interpolation dst]}]
-  (let [interpolation (or interpolation (default-interp src))]
-    (if (vector? size)
-      (cuda/resize src size dst 0 0 interpolation)
+  (let [interpolation (or interpolation (default-interp src))
+        {width :width height :height} (if (map? size) size {})]
+    (if width
+      (cuda/resize src [width height] dst 0 0 interpolation)
       (cuda/resize src [0 0] dst size size interpolation))))
 
 
@@ -3471,7 +3730,7 @@
                             :or {dst-type -1 delta 0 border-type BORDER_DEFAULT}}]
   (cv2/sepFilter2D src dst-type kernel-x kernel-y dst nil delta border-type))
 
-(defmethod-cuda sep-filter-2D :cuda-gpu-mat
+(defmethod-cuda sep-filter-2D :gpu-mat
   [src kernel-x kernel-y & {:keys [dst dst-type delta border-type]
                            :or {dst-type -1 delta 0 border-type BORDER_DEFAULT}}]
   (let [kernel-x (->numpy kernel-x)
@@ -3492,7 +3751,8 @@
   (apply sep-filter-2D src (concat rest [:dst src])))
 
 
-(defmulti set-to
+(declare submat)
+(defmulti set-to!
   "Based on .setTo
    -----------------------------------------------------------------------
    Either sets all values in src to some value (either a number
@@ -3503,7 +3763,7 @@
   (fn [src & rest] (mat-type src)))
 
 ;;If value is a matrix, we need to use copy instead.
-(defmethod set-to :java-mat
+(defmethod set-to! :java-mat
   [^Mat src value & {:keys [mask]}]
   (cond
     (not (or (number? value) (coll? value)))
@@ -3514,7 +3774,7 @@
     (.setTo src (java-scalar value)))
   src)
 
-(defmethod-py set-to :ndarray
+(defmethod-py set-to! :ndarray
   [src value & {:keys [mask]}]
   (cond
     (not (or (number? value) (coll? value)))
@@ -3530,16 +3790,19 @@
     (cv2/copyTo (new-mat src :value value) src mask))
   src)
 
-(defmethod-cuda set-to :cuda-gpu-mat
+(defmethod-cuda set-to! :gpu-mat
   [src value & {:keys [mask]}]
-  (if (not (or (number? value) (coll? value)))
+  (cond
+    (not (or (number? value) (coll? value)))
     (py/$a value copyTo src mask)
-    (py/$a src setTo value mask))
+    mask
+    (py/$a (submat src mask) setTo value)
+    :else
+    (py/$a src setTo value))
   src)
 
 
-(declare submat)
-(defmulti set-value
+(defmulti set-value!
   "Based on .put
    -----------------------------------------------------------------------
    Changes the value of a single element in a matrix. Value can be either a single
@@ -3549,34 +3812,34 @@
    [src {:x x :y y} value]"
   (fn [src & rest] (mat-type src)))
 
-(defmethod set-value :java-mat
+(defmethod set-value! :java-mat
   ([^Mat src x y value]
    (->> (cond->> value (number? value) (repeat (.channels src)))
         ((type->arrayfn (.type src)))
         (.put src y x))
    src)
   ([src {x :x y :y} value]
-   (set-value src x y value)))
+   (set-value! src x y value)))
 
-(defmethod-py set-value :ndarray
+(defmethod-py set-value! :ndarray
   ([src x y value]
    (if (number? value)
      (py/set-item! src [y x] value)
      (py/set-item! src [y x] (python-scalar2 value (channels src))))
    src)
   ([src {x :x y :y} value]
-   (set-value src x y value)))
+   (set-value! src x y value)))
 
-(defmethod-cuda set-value :cuda-gpu-mat
+(defmethod-cuda set-value! :gpu-mat
   ([src x y value]
-   (set-to (submat src {:x x :y y}) value)
+   (set-to! (submat src {:x x :y y}) value)
    src)
   ([src {x :x y :y} value]
-   (set-to (submat src {:x x :y y}) value)
+   (set-to! (submat src {:x x :y y}) value)
    src))
 
 
-(defmulti set-values
+(defmulti set-values!
   "Based on .put
    -----------------------------------------------------------------------
    Changes the values of multiple elements in a matrix. Values should be an
@@ -3587,10 +3850,10 @@
    [src x y values]
    [src {:x x :y y} values]
 
-   NOTE: This method is not implemented for numpy arrays or GPU matrices."
+   NOTE: Not implemented for GPU matrices or numpy arrays."
   (fn [src & rest] (mat-type src)))
 
-(defmethod set-values :java-mat
+(defmethod set-values! :java-mat
   ([^Mat src x y values]
    (.put src y x values)
    src)
@@ -3630,7 +3893,7 @@
                            border-type BORDER_DEFAULT}}]
   (cv2/Sobel src dst-depth dx dy dst ksize scale 0 border-type))
 
-(defmethod-cuda sobel :cuda-gpu-mat
+(defmethod-cuda sobel :gpu-mat
   [src dx dy ksize & {:keys [dst dst-depth scale border-type]
                       :or {dst-depth
                            (or (some-> dst (py/$a depth))
@@ -3666,7 +3929,7 @@
 (defmethod-py split :ndarray [src]
   (vec (cv2/split src)))
 
-(defmethod-cuda split :cuda-gpu-mat [src]
+(defmethod-cuda split :gpu-mat [src]
   (vec (cuda/split src)))
 
 
@@ -3687,7 +3950,7 @@
   [src & {:keys [dst]}]
   (cv2/sqrt src dst))
 
-(defmethod-cuda sqrt :cuda-gpu-mat
+(defmethod-cuda sqrt :gpu-mat
   [src & {:keys [dst]}]
   (cuda/sqrt src dst))
 
@@ -3726,7 +3989,7 @@
      (py/get-item src [(builtins/slice (int sy) (int (+ sy sheight)))
                        (builtins/slice (int sx) (int (+ sx swidth)))]))))
 
-(defmethod-cuda submat :cuda-gpu-mat
+(defmethod-cuda submat :gpu-mat
   ([src x y width height]
    (let [[sx sy swidth sheight] (x-y-w-h x y width height src)]
      (cv2/cuda_GpuMat src (mapv int [sx sy swidth sheight]))))
@@ -3756,7 +4019,7 @@
 
 ;;Subtracting a scalar from a cuda-gpu-mat is currently unsupported,
 ;;so we have to make a new cuda-gpu-mat containing the scalar value.
-(defmethod-cuda subtract :cuda-gpu-mat
+(defmethod-cuda subtract :gpu-mat
   [src1 src2 & {:keys [mask dst]}]
    (if (or (number? src2) (vector? src2))
      (cuda/subtract
@@ -3778,7 +4041,7 @@
    matrix, or a vector of numbers for a multi-channel matrix. Input is
    [src]
 
-   NOTE: This method is not implemented for GPU matrices."
+   NOTE: Not implemented for GPU matrices."
   (fn [src & rest] (mat-type src)))
 
 (defmethod sum-elems :java-mat
@@ -3811,7 +4074,7 @@
   [src thresh type & {:keys [dst max-value] :or {max-value 1.0}}]
   (-> (cv2/threshold src thresh max-value type dst) vec second))
 
-(defmethod-cuda threshold :cuda-gpu-mat
+(defmethod-cuda threshold :gpu-mat
   [src thresh type & {:keys [dst max-value] :or {max-value 1.0}}]
   (-> (cuda/threshold src thresh max-value type dst) vec second))
 
@@ -3830,7 +4093,7 @@
    the original matrix. Input is
    [src weights {:dst}]
 
-   NOTE: Not currently implemented for GPU matrices."
+   NOTE: Not implemented for GPU matrices."
   (fn [src & rest] (mat-type src)))
 
 (defmethod transform-bgr :java-mat
@@ -3861,7 +4124,7 @@
   [src & {:keys [dst]}]
   (cv2/transpose src dst))
 
-(defmethod-cuda transpose :cuda-gpu-mat
+(defmethod-cuda transpose :gpu-mat
   [src & {:keys [dst]}]
   (cuda/transpose src dst))
 
@@ -3886,7 +4149,7 @@
   [src]
   (depth+channels->type (depth src) (channels src)))
 
-(defmethod-cuda type :cuda-gpu-mat
+(defmethod-cuda type :gpu-mat
   [src]
   (py/$a src type))
 

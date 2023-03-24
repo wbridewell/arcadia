@@ -23,34 +23,32 @@
   "Turn a string representation of an integer into its integer value."
   [s]
   (when-let [i (re-find #"\A-?\d+" s)]
-   (Integer/parseInt i)))
+    (Integer/parseInt i)))
 
-(defn- make-number [o v source]
+(defn- make-number [o v]
   (when v
     {:name "object-property"
      :arguments {:property :number
                  :value v
                  :object o}
      :world nil
-     :source source
      :type "instance"}))
 
 (defrecord NumberIdentifier [buffer]
   Component
   (receive-focus
-   [component focus content]
-   (if (and (= (:type focus) "instance")
-            (= (:name focus) "object")
-            (-> focus :arguments :character))
-     (reset! (:buffer component)
-             (make-number focus
-                          (parse-int (-> focus :arguments :character))
-                          component))
-     (reset! (:buffer component) nil)))
+    [component focus content]
+    (if (and (= (:type focus) "instance")
+             (= (:name focus) "object")
+             (-> focus :arguments :character))
+      (reset! (:buffer component)
+              (make-number focus
+                           (parse-int (-> focus :arguments :character))))
+      (reset! (:buffer component) nil)))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method NumberIdentifier [comp ^java.io.Writer w]
   (.write w (format "NumberIdentifier{}")))

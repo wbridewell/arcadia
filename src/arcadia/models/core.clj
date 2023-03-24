@@ -8,15 +8,18 @@
    (arcadia.sensor action-sensor minigrid-sensor stable-viewpoint text-sensor)
    (arcadia.component.highlighter basic-shape center color crowding gaze-target maintenance
                                   proximity saliency vstm)
-   (arcadia.component.minigrid action-detector actor egocentric-map enter-room-detector episode-binder highlighter
-                               key-query
-                               mapper object-navigator pathfinder perception segmenter test-query wallfollower)
+   (arcadia.component.minigrid action-detector actor affordances egocentric-map enter-room-detector 
+                               episode-binder highlighter infogain-enhancer inventory key-query 
+                               mapper object-navigator object-path-enhancer
+                               pathfinder perception segmenter test-query 
+                               wallfollower weight-combiner)
    (arcadia.component.reporter heading-change letter number-magnitude number-parity
                                numerosity object-height object-width shape)
    (arcadia.component.relation detector memorizer tracker update-detector)
    (arcadia.component.semantics color word)
    (arcadia.component
     action-detector
+    affordance-tracker
     allocentric-layout
     automatic-number-sensor
     bottom-up-saliency
@@ -31,11 +34,13 @@
     element-preserver
     episode-binder
     episodic-ltm
-    episodic-memory
+    event-memory
     feedback
     gaze-updater
-    image-segmenter
+    image-segmenter 
     initial-response-generator
+    intention-memory
+    intention-processor 
     java-memory-manager
     length-comparator
     motion-detector
@@ -46,11 +51,16 @@
     numerosity-lexicalizer
     object-count-subvocalizer
     object-file-binder
+    object-found-detector
     object-locator
     object-lost-detector
     ocr-segmenter
-    parameter-configurations
+    outcome-memory
+    parameter-configurations 
     phonological-buffer
+    plan-infuser
+    plan-tracker
+    prospective-memory
     random-refresher
     recall-initializer
     recall-linker
@@ -59,6 +69,7 @@
     response-stm-ctl
     saccade-requester
     scanner
+    scheduler
     scene-constructor
     smooth-pursuit
     spatial-ltm
@@ -99,19 +110,19 @@
   "Setup instructions for the components that run the general visual pipeline."
   []
   (model/setup
-    (model/add image-segmenter {:sensor (get-sensor :stable-viewpoint)})
-    (model/add object-file-binder)
-    (model/add vstm)
-    (model/add object-locator {:sensor (get-sensor :stable-viewpoint)
-                               :use-hats? false})))
+   (model/add image-segmenter {:sensor (get-sensor :stable-viewpoint)})
+   (model/add object-file-binder)
+   (model/add vstm)
+   (model/add object-locator {:sensor (get-sensor :stable-viewpoint)
+                              :use-hats? false})))
 
 #_{:clj-kondo/ignore [:unresolved-symbol]}
 (defn add-gaze-pipeline-components
   "Setup instructions for components that handle gaze."
   []
   (model/setup
-    (model/add gaze-updater {:sensor (get-sensor :stable-viewpoint)})
-    (model/add saccade-requester {:sensor (get-sensor :stable-viewpoint)})
-    (model/add smooth-pursuit {:sensor (get-sensor :stable-viewpoint)})
-    (model/add highlighter.gaze-target)
-    (model/add highlighter.maintenance)))
+   (model/add gaze-updater {:sensor (get-sensor :stable-viewpoint)})
+   (model/add saccade-requester {:sensor (get-sensor :stable-viewpoint)})
+   (model/add smooth-pursuit {:sensor (get-sensor :stable-viewpoint)})
+   (model/add highlighter.gaze-target)
+   (model/add highlighter.maintenance)))

@@ -19,13 +19,12 @@
        to which the property belongs."
   (:require [arcadia.component.core :refer [Component]]))
 
-(defn- make-parity [o v source]
+(defn- make-parity [o v]
     {:name "object-property"
      :arguments {:property :parity
                  :value v
                  :object o}
      :world nil
-     :source source
      :type "instance"})
 
 (defrecord NumberParityReporter [buffer]
@@ -37,13 +36,12 @@
             (-> focus :arguments :number))
      (reset! (:buffer component)
              (make-parity focus
-                          (if (odd? (->  focus :arguments :number)) :odd :even)
-                          component))
+                          (if (odd? (->  focus :arguments :number)) :odd :even)))
      (reset! (:buffer component) nil)))
 
   (deliver-result
    [component]
-   #{@(:buffer component)}))
+   (list @buffer)))
 
 (defmethod print-method NumberParityReporter [comp ^java.io.Writer w]
   (.write w (format "NumberParityReporter{}")))

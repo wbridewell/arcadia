@@ -127,7 +127,7 @@
 (defn causal-relation
   "Creates an interlingua element describing the causal relation
   between a causal antecedent and consequent."
-  [model antecedent consequent source]
+  [model antecedent consequent]
   (when (and model antecedent consequent)
     ;; if the relation is NO-EFFECT, make sure it isn't
     ;; being treated unnecessarily as omissive
@@ -145,6 +145,5 @@
                              :model model
                              :relation (get-causal-relation model (map omissive causal-relations))})
                :type "instance"
-               :source source
                :world nil}
               [:arguments :omissive?] false)))

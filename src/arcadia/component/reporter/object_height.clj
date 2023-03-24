@@ -26,12 +26,11 @@
 ;; be replaced with one that producers either a "gist" or an "object-property"
 ;; element.
 
-(defn- make-height [segment height source]
+(defn- make-height [segment height]
   {:name "object-height"
    :arguments {:height height  :segment segment}
    :world nil
-   :type "instance"
-   :source source})
+   :type "instance"})
 
 (defrecord ObjectHeightReporter [buffer]
   Component
@@ -42,12 +41,12 @@
                           (= (:world focus) nil) ;; direct perception only
                           (obj/get-segment focus content))]
       (reset! (:buffer component)
-              (make-height segment (-> segment :region :height) component))
+              (make-height segment (-> segment :region :height)))
       (reset! (:buffer component) nil)))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method ObjectHeightReporter [comp ^java.io.Writer w]
   (.write w (format "ObjectHeightReporter{}")))

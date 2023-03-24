@@ -31,7 +31,7 @@
        (> (:precise-delta-count (:arguments old)) min-delta-count)
        (> (Math/abs (- (speed new) (speed old))) speed-change-threshold)))
 
-(defn make-event [old new component]
+(defn make-event [old new]
   {:name "event"
    :arguments {:event-name "speed-change"
                :event-lifespan 25
@@ -44,29 +44,29 @@
                :slowing-down? (< (Math/abs (speed new)) (Math/abs (speed old)))
                :objects (list new)}
    :type "instance"
-   :source component
    :world nil})
 
-(defrecord SpeedChangeDetector [buffer vstm-history speed-change-threshold] Component
+(defrecord SpeedChangeDetector [buffer vstm-history speed-change-threshold]
+  Component
   (receive-focus
-   [component focus content]
-   (reset! (:buffer component) nil)
+    [component focus content]
+    (reset! (:buffer component) nil)
 
-   (doall (map #(let [new (obj/updated-object % content)]
-                  (when (speed-changed? % new (:speed-change-threshold component))
-                    (println "------------------------------------------CHANGE IN SPEED-------------------------"
-                             (-> % :arguments ((juxt :color :precise-delta-x :precise-delta-y))) "==>"
-                             (-> new :arguments ((juxt :color :precise-delta-x :precise-delta-y))))
-                    (swap! (:buffer component) conj (make-event % new component))))
-               @(:vstm-history component)))
+    (doall (map #(let [new (obj/updated-object % content)]
+                   (when (speed-changed? % new (:speed-change-threshold component))
+                     (println "------------------------------------------CHANGE IN SPEED-------------------------"
+                              (-> % :arguments ((juxt :color :precise-delta-x :precise-delta-y))) "==>"
+                              (-> new :arguments ((juxt :color :precise-delta-x :precise-delta-y))))
+                     (swap! (:buffer component) conj (make-event % new))))
+                @(:vstm-history component)))
 
    ;; update the history of VSTM for the next cycle
-   (reset! (:vstm-history component)
-           (obj/get-vstm-objects content :tracked? true)))
+    (reset! (:vstm-history component)
+            (obj/get-vstm-objects content :tracked? true)))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method SpeedChangeDetector [comp ^java.io.Writer w]
   (.write w (format "SpeedChangeDetector{}")))

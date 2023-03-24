@@ -19,35 +19,34 @@
   mode: exclude - inhibit regions that exclude the point
         include - inhibit regions that include the point"
   (:require [arcadia.component.core :refer [Component]]
-            [arcadia.vision.regions :as reg]))
+            [arcadia.utility.geometry :as geo]))
 
-(defn make-inhibition [location component]
+(defn make-inhibition [location]
   {:name "fixation-inhibition"
    :arguments {:region "location"
                :mode "include"
                :reason "sweep"}
 
    :world nil
-   :source component
    :type "instance"})
 
 (defrecord SweepInhibitor [buffer]
   Component
   (receive-focus
-   [component focus content]
+    [component focus content]
 
-   (let [fixations (filter #(= (:name %) "fixation") content)
-         centers (map #(-> % :arguments :segment :region reg/center) fixations)
-         sweep-position (:value (:arguments (first (filter #(= (:name %) "sweep-position") content))))
-         past-centers (if (nil? sweep-position)
-                        []
-                        (filter #(<= (first %) sweep-position) centers))
-         inhibitions (map #(make-inhibition % component) past-centers)]
+    (let [fixations (filter #(= (:name %) "fixation") content)
+          centers (map #(-> % :arguments :segment :region geo/center) fixations)
+          sweep-position (:value (:arguments (first (filter #(= (:name %) "sweep-position") content))))
+          past-centers (if (nil? sweep-position)
+                         []
+                         (filter #(<= (first %) sweep-position) centers))
+          inhibitions (map #(make-inhibition %) past-centers)]
       (reset! (:buffer component) inhibitions)))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method SweepInhibitor [comp ^java.io.Writer w]
   (.write w (format "SweepInhibitor{}")))

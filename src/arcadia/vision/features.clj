@@ -1,5 +1,6 @@
 (ns
-  ^{:doc
+  ^{:author "Andrew Lovett"
+    :doc
     "Provides support for representing, operating over, and visualizing feature
      maps and feature histograms.
 
@@ -24,7 +25,8 @@
   arcadia.vision.features
   ; (:use clojure.math.numeric-tower arcadia.utility.display arcadia.utility.general)
   (:refer-clojure :exclude [name])
-  (:require [arcadia.utility [general :as g] [opencv :as cv]]
+  (:require [arcadia.utility.general :as g]
+            [arcadia.utility.opencv :as cv]
             [clojure.string :refer [capitalize]]))
 
 ; (def ^:private intensity-wts
@@ -147,7 +149,7 @@
         colormap-height xm
         height (+ colormap-height ym)
         canvas (cv/new-mat magnitude-colormap
-                           :size [width height] :value background-color)
+                           :size {:width width :height height} :value background-color)
         x0 xm
         x1 (int (+ xm (/ colormap-width 4)))
         x2 (int (+ xm (/ colormap-width 2)))
@@ -155,30 +157,30 @@
         x+ (+ xm colormap-width)
         yc (+ colormap-height (int (/ ym 2))) ;;center y value for lines
         radius (Math/floor (/ ym 3))] ;;radius for lines
-    (cv/set-to (cv/submat canvas xm 0 colormap-width colormap-height)
+    (cv/set-to! (cv/submat canvas xm 0 colormap-width colormap-height)
                (-> magnitude-colormap cv/transpose
-                   (cv/resize [colormap-width colormap-height])))
+                   (cv/resize {:width colormap-width :height colormap-height})))
 
     ;;0
-    (cv/line canvas {:x x0 :y colormap-height} {:x x0 :y yc}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x x0 :y colormap-height} {:x x0 :y yc}
+              line-color :thickness tick-width)
     ;;0.25
-    (cv/line canvas {:x x1 :y colormap-height} {:x x1 :y (+ colormap-height radius)}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x x1 :y colormap-height} {:x x1 :y (+ colormap-height radius)}
+              line-color :thickness tick-width)
 
     ;;0.5
-    (cv/line canvas {:x x2 :y colormap-height} {:x x2 :y yc}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x x2 :y colormap-height} {:x x2 :y yc}
+              line-color :thickness tick-width)
 
     ;;0.75
-    (cv/line canvas {:x x3 :y colormap-height} {:x x3 :y (+ colormap-height radius)}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x x3 :y colormap-height} {:x x3 :y (+ colormap-height radius)}
+              line-color :thickness tick-width)
 
     ;;+1
-    (cv/line canvas {:x (- x+ radius) :y yc} {:x (+ x+ radius) :y yc}
-             line-color :thickness tick-width)
-    (cv/line canvas {:x x+ :y (- yc radius)} {:x x+ :y (+ yc radius)}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x (- x+ radius) :y yc} {:x (+ x+ radius) :y yc}
+              line-color :thickness tick-width)
+    (cv/line! canvas {:x x+ :y (- yc radius)} {:x x+ :y (+ yc radius)}
+              line-color :thickness tick-width)
     canvas))
 
 (defn difference-axis
@@ -195,7 +197,7 @@
         colormap-height xm
         height (+ colormap-height ym)
         canvas (cv/new-mat difference-colormap
-                           :size [width height] :value background-color)
+                           :size {:width width :height height} :value background-color)
         x-- xm
         x- (int (+ xm (/ colormap-width 4)))
         x0 (int (+ xm (/ colormap-width 2)))
@@ -203,31 +205,31 @@
         x++ (+ xm colormap-width)
         yc (+ colormap-height (int (/ ym 2))) ;;center y value for lines
         radius (Math/floor (/ ym 3))] ;;radius for lines
-    (cv/set-to (cv/submat canvas xm 0 colormap-width colormap-height)
+    (cv/set-to! (cv/submat canvas xm 0 colormap-width colormap-height)
                (-> difference-colormap cv/transpose
-                   (cv/resize [colormap-width colormap-height])))
+                   (cv/resize {:width colormap-width :height colormap-height})))
 
     ;;-1
-    (cv/line canvas {:x (- x-- radius) :y yc} {:x (+ x-- radius) :y yc}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x (- x-- radius) :y yc} {:x (+ x-- radius) :y yc}
+              line-color :thickness tick-width)
 
     ;;-0.5
-    (cv/line canvas {:x x- :y colormap-height} {:x x- :y (+ colormap-height radius)}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x x- :y colormap-height} {:x x- :y (+ colormap-height radius)}
+              line-color :thickness tick-width)
 
     ;;0
-    (cv/line canvas {:x x0 :y colormap-height} {:x x0 :y yc}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x x0 :y colormap-height} {:x x0 :y yc}
+              line-color :thickness tick-width)
 
     ;;0.5
-    (cv/line canvas {:x x+ :y colormap-height} {:x x+ :y (+ colormap-height radius)}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x x+ :y colormap-height} {:x x+ :y (+ colormap-height radius)}
+              line-color :thickness tick-width)
 
     ;;+1
-    (cv/line canvas {:x (- x++ radius) :y yc} {:x (+ x++ radius) :y yc}
-             line-color :thickness tick-width)
-    (cv/line canvas {:x x++ :y (- yc radius)} {:x x++ :y (+ yc radius)}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x (- x++ radius) :y yc} {:x (+ x++ radius) :y yc}
+              line-color :thickness tick-width)
+    (cv/line! canvas {:x x++ :y (- yc radius)} {:x x++ :y (+ yc radius)}
+              line-color :thickness tick-width)
     canvas))
 
 (defn direction-axis
@@ -244,23 +246,20 @@
         y (int (/ height 2))
         radius (Math/floor (/ height 5))
         canvas (cv/new-mat magnitude-colormap
-                           :size [width height] :value [0 0 background-color])]
+                           :size {:width width :height height} :value [0 0 background-color])]
 
     (dotimes [i 9]
       (let [multi (/ i 8.0)
             angle-deg (* 360.0 multi)
             angle (* angle-deg deg->pi)
-            x (int (+ xm (* multi axis-width)))
-            cos (Math/cos angle)
-            sin (Math/sin angle)]
-        (cv/arrowed-line
+            x (int (+ xm (* multi axis-width)))]
+        (cv/arrowed-line!
          canvas
          {:x (- x (-> angle Math/cos (* radius) Math/round))
           :y (- y (-> angle Math/sin (* radius) Math/round))}
          {:x (+ x (-> angle Math/cos (* radius) Math/round))
           :y (+ y (-> angle Math/sin (* radius) Math/round))}
-         [(* angle-deg 0.5) 255 255] :thickness line-width :tip-length 0.4)
-        ))
+         [(* angle-deg 0.5) 255 255] :thickness line-width :tip-length 0.4)))
     (cv/apply-lookup-table! canvas LUT-opp-to-hsv)
     (cv/cvt-color! canvas cv/COLOR_HSV2BGR)))
 
@@ -278,7 +277,7 @@
         y (int (/ height 2))
         radius (Math/floor (/ height 5))
         canvas (cv/new-mat magnitude-colormap
-                           :size [width height] :value [0 0 background-color])]
+                           :size {:width width :height height} :value [0 0 background-color])]
 
     (dotimes [i 9]
       (let [multi (/ i 8.0)
@@ -287,7 +286,7 @@
             x (int (+ xm (* multi axis-width)))
             cos (Math/cos angle)
             sin (Math/sin angle)]
-        (cv/line
+        (cv/line!
          canvas
          {:x (- x (-> angle Math/cos (* radius) Math/round))
           :y (- y (-> angle Math/sin (* radius) Math/round))}
@@ -302,7 +301,7 @@
   "Returns a blank rectangle the same size as a typical axis, as might be returned
    for example, by magnitude-axis."
   [width & {:keys [margin] :or {margin (Math/ceil (/ width 10))}}]
-  (cv/new-mat magnitude-colormap :size [width (* margin 2)] :value background-color))
+  (cv/new-mat magnitude-colormap :size {:width width :height (* margin 2)} :value background-color))
 
 (defn axis
   "Calls the appropriate axis function for the feature-type of a feature-map or
@@ -337,7 +336,7 @@
 (defn y-axis
   [width height]
   (let [canvas (cv/new-mat magnitude-colormap
-                           :size [width height] :value background-color)
+                           :size {:width width :height height} :value background-color)
         ym 4
         xm 4
         w (- width (* xm 2))
@@ -348,24 +347,24 @@
         y25 (+ ym (int (* h 0.75)))]
 
     ;1
-    (cv/line canvas {:x xm :y ym} {:x (+ xm w) :y ym}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x xm :y ym} {:x (+ xm w) :y ym}
+              line-color :thickness tick-width)
 
     ;0.75
-    (cv/line canvas {:x x50 :y y75} {:x (+ xm w) :y y75}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x x50 :y y75} {:x (+ xm w) :y y75}
+              line-color :thickness tick-width)
 
     ;0.50
-    (cv/line canvas {:x xm :y y50} {:x (+ xm w) :y y50}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x xm :y y50} {:x (+ xm w) :y y50}
+              line-color :thickness tick-width)
 
     ;0.25
-    (cv/line canvas {:x x50 :y y25} {:x (+ xm w) :y y25}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x x50 :y y25} {:x (+ xm w) :y y25}
+              line-color :thickness tick-width)
 
     ;0
-    (cv/line canvas {:x xm :y (- height ym)} {:x (+ xm w) :y (- height ym)}
-             line-color :thickness tick-width)
+    (cv/line! canvas {:x xm :y (- height ym)} {:x (+ xm w) :y (- height ym)}
+              line-color :thickness tick-width)
 
     canvas))
 
@@ -380,8 +379,7 @@
         axis-width- (- width (* xm 2) 1)
         axis-height- (- height (* ym 2) 1)
         bin-width (/ axis-width- bins-)
-        canvas (cv/zeros magnitude-colormap :size [(inc axis-width-) height])
-        canvas (cv/new-mat magnitude-colormap :size [(inc axis-width-) height]
+        canvas (cv/new-mat magnitude-colormap :size {:width (inc axis-width-) :height height}
                            :value background-color)
         ys (-> (cv/subtract (cv/ones src) src) (cv/multiply axis-height-)
                (cv/convert-to cv/CV_32S)
@@ -392,15 +390,15 @@
                    (cv/add ym)))]
 
     ;;Draw a line along y = 0
-    ; (cv/line canvas {:x 0 :y (+ ym axis-height-)}
-    ;          {:x axis-width- :y (+ ym axis-height-)}
-    ;          dim-color :thickness 2)
+    ; (cv/line! canvas {:x 0 :y (+ ym axis-height-)}
+    ;           {:x axis-width- :y (+ ym axis-height-)}
+    ;           dim-color :thickness 2)
 
     ;;Add tick marks for the y-axis at 0.25, 0.5, 0.75 and 1
 
     (when i-ys
       (dotimes [idx bins-]
-        (cv/line
+        (cv/line!
          canvas
          {:x (* idx bin-width)
           :y (cv/get-value i-ys 0 idx)}
@@ -409,7 +407,7 @@
          dim-line-color :thickness 2)))
 
     (dotimes [idx bins-]
-      (cv/line
+      (cv/line!
        canvas
        {:x (* idx bin-width)
         :y (cv/get-value ys 0 idx)}
@@ -418,7 +416,7 @@
        line-color :thickness 2))
 
     (-> (cv/hconcat (y-axis margin height) canvas
-                    (cv/new-mat magnitude-colormap :size [margin height]
+                    (cv/new-mat magnitude-colormap :size {:width margin :height height}
                                 :value background-color))
         (cv/vconcat (axis hist width :margin margin)))))
 
@@ -444,13 +442,13 @@
 
 ; (def gk (cv/get-gaussian-kernel 31))
 ; (dotimes [i 15]
-;   (cv/set-value gk 0 (+ i 8) 0.0))
+;   (cv/set-value! gk 0 (+ i 8) 0.0))
 ;
 ; (cv/divide! gk (cv/sum-elems gk))
 
 (defn make-gaussian-kernel [width center-width]
   (let [gk (cv/get-gaussian-kernel width)]
-    (cv/set-values gk {:x 0 :y (-> (- width center-width) (/ 2) int)}
+    (cv/set-values! gk {:x 0 :y (-> (- width center-width) (/ 2) int)}
                    (float-array center-width 0))
     (cv/divide! gk (cv/sum-elems gk))))
 
@@ -466,7 +464,7 @@
                      #(cv/sep-filter-2D % kernel kernel))
 
                    :else
-                   #(cv/gaussian-blur % [contrast-width contrast-width]))
+                   #(cv/gaussian-blur % {:width contrast-width :height contrast-width}))
 
         mean-surround (when (< weight-weight 1) (gauss-fn src))
         weighted-surround (when (> weight-weight 0)
@@ -479,7 +477,7 @@
        mean-surround (cv/subtract src mean-surround)
        :else (cv/subtract src weighted-surround))}))
   ; {:feature-type :difference :matrix-type :feature-map :matrix
-  ;  (cv/subtract src (cv/gaussian-blur src [contrast-width contrast-width]))})
+  ;  (cv/subtract src (cv/gaussian-blur src {:width contrast-width :height contrast-width}))})
 
 (defn enhance-map
   "Computes a feature enhancement map, given a feature map and a contrast width."
@@ -492,8 +490,8 @@
 ;   "Compute a contrast map, given a feature map and a contrast width."
 ;   [{src :matrix :as fmap} contrast-width]
 ;   {:feature-type :difference :matrix-type :feature-map :matrix
-;    (some-> src (cv/multiply (cv/abs src)) (cv/gaussian-blur [15 15])
-;            (cv/divide (cv/gaussian-blur (cv/abs src) [15 15])))})
+;    (some-> src (cv/multiply (cv/abs src)) (cv/gaussian-blur {:width 15 :height 15})
+;            (cv/divide (cv/gaussian-blur (cv/abs src) {:width 15 :height 15})))})
 ;
 ; (defn new-map
 ;   "Compute a contrast map, given a feature map and a contrast width."
@@ -937,7 +935,7 @@
   [{matrix :matrix ftype :feature-type intensity :intensity :as fmap}
    & {:keys [mask area-sqrt min-mean min-value]}]
   (let [multi (or area-sqrt (and mask (Math/sqrt (cv/count-non-zero mask)))
-                  (Math/sqrt (cv/size matrix)))
+                  (Math/sqrt (cv/area matrix)))
         mean (-> matrix
                  (cond-> min-value (cv/threshold min-value cv/THRESH_TOZERO))
                  (cv/mean-value :mask mask))]

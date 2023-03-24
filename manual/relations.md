@@ -1,4 +1,4 @@
-Relations
+Relations (Potentially Outdated)
 ===
 Relational reasoning is at the core of symbolic AI: in order for ARCADIA to be able to solve even basic problems, it needs to have a robust and compositional way to represent and manipulate relations. The library `arcadia.utility.relations`provides the basis for ARCADIA's approach to relational reasoning.
 
@@ -42,16 +42,16 @@ All of the above properties define a relation; but in order to be useful, the re
 | `:justifications` | A sequence of interlingua elements which provide the basis for the relation's inference. |
 
 Component Pipeline
-Relation instances are used in ARCADIA in two major places: working memory and episodic memory. To get there, they follow this process:
+Relation instances are used in ARCADIA in two major places: working memory and event memory. To get there, they follow this process:
 
 1. Instantiation requests are generated from the relation's SR-links by the SRLinkProcessor.
 1. The RelationTracker takes in these requests, and instantiates the relations. Note the dotted line here: some relations may require the focus of attention to be instantiated, but others may be instantiated without the additional use of attention.
 1. Working Memory
         1. The RelationMemorizer generates requests to encode every relation instance in working memory if its value has changed.
         1. Finally, if given the focus of attention, WorkingMemory carries out the memorization request by storing the relation instance for later retrieval.
-1. Episodic Memory
+1. Event Memory
     1. The RelationDetector acknowledges the presence of relation instances in accessible content, and generates an event for them.
-    1. Finally, EpisodicMemory streams together the punctuative events into a temporally ordered and compressed representation.
+    1. Finally, EventMemory streams together the punctuative events into a temporally ordered and compressed representation.
 
 ![Box and arrow diagram illustrating the pipeline described above.](images/relations.png)
 
@@ -162,7 +162,6 @@ At cycle 10, let's say these three objects are present in VSTM:
              :region {:center {:x 250 :y 100} ...}
              ...}
  :type "instance"
- :source arcadia.component.VSTM
  :world "vstm"}
 
 {:name "object"
@@ -170,7 +169,6 @@ At cycle 10, let's say these three objects are present in VSTM:
              :region {:center {:x 50 :y 100} ...}
              ...}
  :type "instance"
- :source arcadia.component.VSTM
  :world "vstm"}
 
 {:name "object"
@@ -178,7 +176,6 @@ At cycle 10, let's say these three objects are present in VSTM:
              :region {:center {:x 400 :y 100} ...}
              ...}
  :type "instance"
- :source arcadia.component.VSTM
  :world "vstm"}
 ```
 
@@ -192,20 +189,17 @@ The SRLinkProcessor will match these objects to the descriptors in the stimulus 
                                        :region {:center {:x 250 :y 100} ...}
                                        ...}
                            :type "instance"
-                           :source arcadia.component.VSTM
                            :world "vstm"}
                           {:name "object"
                            :arguments {:color "red"
                                        :region {:center {:x 50 :y 100} ...}
                                        ...}
                            :type "instance"
-                           :source arcadia.component.VSTM
                            :world "vstm"}
                 :values [true]
                 :context [real]
                 :justifications [...]}
     :type "action"
-    :source arcadia.component.SRLinkProcessor
     :world nil}
 
 {:name "instantiate"
@@ -215,20 +209,17 @@ The SRLinkProcessor will match these objects to the descriptors in the stimulus 
                                        :region {:center {:x 400 :y 100} ...}
                                        ...}
                            :type "instance"
-                           :source arcadia.component.VSTM
                            :world "vstm"}
                           {:name "object"
                            :arguments {:color "red"
                                        :region {:center {:x 50 :y 100} ...}
                                        ...}
                            :type "instance"
-                           :source arcadia.component.VSTM
                            :world "vstm"}
                 :values [true]
                 :context [real]
                 :justifications [...]}
     :type "action"
-    :source arcadia.component.SRLinkProcessor
     :world nil}
 
 {:name "instantiate"
@@ -238,20 +229,17 @@ The SRLinkProcessor will match these objects to the descriptors in the stimulus 
                                        :region {:center {:x 400 :y 100} ...}
                                        ...}
                            :type "instance"
-                           :source arcadia.component.VSTM
                            :world "vstm"}
                           {:name "object"
                            :arguments {:color "blue"
                                        :region {:center {:x 250 :y 100} ...}
                                        ...}
                            :type "instance"
-                           :source arcadia.component.VSTM
                            :world "vstm"}
                 :values [true]
                 :context [real]
                 :justifications [...]}
     :type "action"
-    :source arcadia.component.SRLinkProcessor
     :world nil}
 ```
 
@@ -267,7 +255,6 @@ On cycle 11, the `RelationTracker` executes each of these requests, matching all
              ...
              :justifications [...]}
  :world nil
- :source arcadia.component.RelationTracker
  :type "instance"}
 
 {:name "relation"
@@ -279,7 +266,6 @@ On cycle 11, the `RelationTracker` executes each of these requests, matching all
              ...
              :justifications [...]}
  :world nil
- :source arcadia.component.RelationTracker
  :type "instance"}
 
 {:name "relation"
@@ -291,7 +277,6 @@ On cycle 11, the `RelationTracker` executes each of these requests, matching all
              ...
              :justifications [...]}
  :world nil
- :source arcadia.component.RelationTracker
  :type "instance"}
 ```
 Note that these relation instances have a `:world` of `nil`, meaning that they aren't yet in any memory system, and are therefore fleeting. On cycle 12, the `RelationMemorizer` creates these requests to update the status of the relations in working memory (the `:new` arguments are stand-ins for the actual relation instances above):
@@ -301,21 +286,18 @@ Note that these relation instances have a `:world` of `nil`, meaning that they a
  :arguments {:old []
              :new [rightOf(B,R)]}
  :type "action"
- :source arcadia.component.RelationMemorizer
  :world nil}
 
 {:name "memory-update"
  :arguments {:old []
              :new [rightOf(Y,R)]}
  :type "action"
- :source arcadia.component.RelationMemorizer
  :world nil}
 
 {:name "memory-update"
  :arguments {:old []
              :new [rightOf(Y,B)]}
  :type "action"
- :source arcadia.component.RelationMemorizer
  :world nil}
 ```
 One by one from cycles 13-15, these `memory-update` requests get processed. Eventually, all of the relations now exist within working memory:
@@ -326,7 +308,6 @@ One by one from cycles 13-15, these `memory-update` requests get processed. Even
              :argument-descriptors [b-descr r-descr]
              :arguments ...}
  :world "working-memory"
- :source arcadia.component.WorkingMemory
  :type "instance"}
 
 {:name "relation"
@@ -334,7 +315,6 @@ One by one from cycles 13-15, these `memory-update` requests get processed. Even
              :argument-descriptors [y-descr r-descr]
              :arguments ...}
  :world "working-memory"
- :source arcadia.component.WorkingMemory
  :type "instance"}
 
 {:name "relation"
@@ -342,7 +322,6 @@ One by one from cycles 13-15, these `memory-update` requests get processed. Even
              :argument-descriptors [y-descr b-descr]
              :arguments ...}
  :world "working-memory"
- :source arcadia.component.WorkingMemory
  :type "instance"}
 ```
 At this point, the relations are ready for use by other relations. On cycle 16, the `SRLinkProcessor` feeds these relation instances into the `between` relation's SR-link. Like with `rightOf` the SR-link is called a total of nine times, but only one call results in an instantiation request (like above, we use "rightOf(x,y)" in the `:justifications` field as a stand-in for the actual relation instances):
@@ -353,23 +332,19 @@ At this point, the relations are ready for use by other relations. On cycle 16, 
                 :objects [{:name "object"
                            :arguments {:color "blue" ...}
                            :type "instance"
-                           :source arcadia.component.VSTM
                            :world "vstm"}
                           {:name "object"
                            :arguments {:color "red" ...}
                            :type "instance"
-                           :source arcadia.component.VSTM
                            :world "vstm"}
                           {:name "object"
                            :arguments {:color "yellow" ...}
                            :type "instance"
-                           :source arcadia.component.VSTM
                            :world "vstm"}
                 :values [true]
                 :context [real]
                 :justifications [rightOf(B, R) rightOf(Y, B)]}
     :type "action"
-    :source arcadia.component.SRLinkProcessor
     :world nil}
 ```
 

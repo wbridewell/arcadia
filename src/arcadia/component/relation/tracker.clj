@@ -21,21 +21,22 @@
 (defn- instantiate-relation [component request]
   (rel/relate request (:object-descriptors component) component))
 
-(defrecord RelationTracker [buffer object-descriptors] Component
+(defrecord RelationTracker [buffer object-descriptors]
+  Component
   (receive-focus
-   [component focus content]
-   (reset! (:buffer component) nil)
+    [component focus content]
+    (reset! (:buffer component) nil)
 
    ;; generate instances of each satisfied relation and
    ;; broadcast all valid relation instances to accessible content
-   (doseq [rel (mapcat (partial instantiate-relation component)
-                       (filter #(= (:name %) "instantiate") content))
-           :when rel]
-     (swap! (:buffer component) conj rel)))
+    (doseq [rel (mapcat (partial instantiate-relation component)
+                        (filter #(= (:name %) "instantiate") content))
+            :when rel]
+      (swap! (:buffer component) conj rel)))
 
   (deliver-result
-   [component]
-   @(:buffer component)))
+    [component]
+    @buffer))
 
 (defmethod print-method RelationTracker [comp ^java.io.Writer w]
   (.write w (format "RelationTracker{}")))

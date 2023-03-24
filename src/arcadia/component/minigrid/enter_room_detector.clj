@@ -3,13 +3,12 @@
   (:require [arcadia.component.core :refer [Component]]
             [arcadia.utility.descriptors :as d]))
 
-(defn entry-event [component]
+(defn entry-event []
   {:name "event"
    :arguments {:event-name "enter-room"
                ;:event-lifespan nil
                }
    :type "instance"
-   :source component
    :world nil})
 
 (defrecord MinigridEnterRoomDetector [buffer hallway?]
@@ -29,7 +28,7 @@
             (and (or (not= "wall" (-> mg-perception :arguments :adjacency-info :left :category))
                      (not= "wall" (-> mg-perception :arguments :adjacency-info :right :category)))
                  @(:hallway? component))
-            (do (reset! (:buffer component) (entry-event component))
+            (do (reset! (:buffer component) (entry-event))
                 (reset! (:hallway? component) false))
 
             :else
@@ -37,7 +36,7 @@
 
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method MinigridEnterRoomDetector [comp ^java.io.Writer w]
   (.write w (format "MinigridEnterRoomDetector{}")))

@@ -1,7 +1,7 @@
 (ns arcadia.component.allocentric-layout
   (:require [arcadia.utility.descriptors :as d]
             [arcadia.utility.opencv :as cv]
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             [clojure.math.numeric-tower :as math]
             [arcadia.component.core :refer [Component]]))
 
@@ -48,8 +48,8 @@
 
 (defn- assign-to-cell [width length objects]
   (group-by #(+ (first %) (* 3 (second %)))
-            (map #(vector (math/floor (* (/ (reg/center-x %) width) 3))
-                          (math/floor (* (/ (reg/center-y %) length) 3)))
+            (map #(vector (math/floor (* (/ (geo/center-x %) width) 3))
+                          (math/floor (* (/ (geo/center-y %) length) 3)))
                  objects)))
 
 ;; only a 2D grid at the moment, no height aspect
@@ -70,14 +70,15 @@
 ;; of objects on that screen. The perspective and the boundaries are 
 ;; assumed to be fixed.
 
-(defrecord AllocentricLayout [buffer] Component
-           (receive-focus
-             [component focus content]
-             (let [segmentation (d/first-element content :name "image-segmentation")]
-               (reset! buffer (spatial-map (allocentrize-display segmentation) "computer" component))))
-           (deliver-result
-             [component]
-             #{@(:buffer component)}))
+(defrecord AllocentricLayout [buffer]
+  Component
+  (receive-focus
+    [component focus content]
+    (let [segmentation (d/first-element content :name "image-segmentation")]
+      (reset! buffer (spatial-map (allocentrize-display segmentation) "computer" component))))
+  (deliver-result
+    [component]
+    (list @buffer)))
 
 (defmethod print-method AllocentricLayout [comp ^java.io.Writer w]
   (.write w (format "AllocentricLayout{}")))

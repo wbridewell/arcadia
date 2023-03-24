@@ -47,7 +47,7 @@
     :color
     :object))
 
-(defrecord WordSemantics [buffer parameters enhancement ocr] 
+(defrecord WordSemantics [buffer parameters enhancement ocr]
   Component
   (receive-focus
    [component focus content]
@@ -73,29 +73,12 @@
                               :strength  (+ (-> component :parameters :base-strength)
                                             @(:enhancement component))
                               :path :word}
-                  :source component
                   :type "instance"
-                  :world nil}))))
-
-  ;;  (if (d/element-matches? focus :name "object" :world nil)
-  ;;    (reset! (:buffer component)
-  ;;            (let [word (do-ocr (:ocr component) (-> focus :arguments :image))
-  ;;                  property (word-category word)]
-  ;;              (when word
-  ;;                {:name "semantics"
-  ;;                 :arguments {:property property
-  ;;                             property word
-  ;;                             :strength  (+ (-> component :parameters :base-strength)
-  ;;                                           @(:enhancement component))
-  ;;                             :path :word}
-  ;;                 :source component
-  ;;                 :type "instance"
-  ;;                 :world nil})))
-  ;;    (reset! (:buffer component) nil))
-   )
+                  :world nil})))))
+  
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method WordSemantics [comp ^java.io.Writer w]
   (.write w (format "WordSemantics{}")))

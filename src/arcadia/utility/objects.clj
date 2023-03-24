@@ -1,9 +1,9 @@
 (ns
  ^{:doc "Functions for operating on visual object-files."}
  arcadia.utility.objects
-  (:require (arcadia.utility [general :as g]
-                             [descriptors :as d])
-            [arcadia.vision.regions :as reg]))
+  (:require [arcadia.utility.descriptors :as d]
+            [arcadia.utility.general :as g]
+            [arcadia.utility.geometry :as geo])) 
 
 ;; Threshold for determining if two objects are the same size.
 (def size-similarity-threshold 0.25)
@@ -35,7 +35,7 @@
   "Returns true when two areas are equal within a given percentage."
   [region1 region2 & {:keys [threshold]
                       :or {threshold size-similarity-threshold}}]
-  (similar-size-areas? (reg/area region1) (reg/area region2) :threshold threshold))
+  (similar-size-areas? (geo/area region1) (geo/area region2) :threshold threshold))
 
 (defn similar-size-contours?
   "Returns true when two contour areas are equal within a percentage."
@@ -54,7 +54,7 @@
          region2 (:region (:arguments obj2))]
      (and region1 region2
           (= (:world obj1) (:world obj2))
-          (reg/intersect? region1 region2)
+          (geo/intersect? region1 region2)
           (similar-size-regions? region1 region2 epsilon))))
   ([obj1 obj2]
    (location-match? obj1 obj2 0.05)))
@@ -82,8 +82,8 @@
 (defn similar-size?
   "Returns true when two areas are equal within a given percentage."
   [reg1 reg2 pct-buffer]
-  (let [area1 (reg/area reg1)
-        area2 (reg/area reg2)]
+  (let [area1 (geo/area reg1)
+        area2 (geo/area reg2)]
     (or (within-epsilon? area1 area2 pct-buffer)
         (within-epsilon? area2 area1 pct-buffer))))
 
@@ -92,12 +92,12 @@
    (segment-location-match? seg1 seg2 0.15))
   ([seg1 seg2 epsilon]
    (and (:region seg1) (:region seg2)
-        (reg/intersect? (:region seg1) (:region seg2))
+        (geo/intersect? (:region seg1) (:region seg2))
         (similar-size? (:region seg1) (:region seg2) epsilon))))
 
 (defn segment-overlap? [seg1 seg2]
   (and (:region seg1) (:region seg2)
-       (reg/intersect? (:region seg1) (:region seg2))))
+       (geo/intersect? (:region seg1) (:region seg2))))
 
 (defn trace-segment? [segment csegs]
     (not-any? #(segment-location-match? segment %) csegs))
@@ -166,7 +166,7 @@
           ys (mapv #(-> % :region :y) (:segments (:arguments group-fixation)))
           minX (apply min xs)
           minY (apply min ys)]
-      (reg/prepare {:x minX :y minY
+      (geo/prepare {:x minX :y minY
                     :width (+ d (- (apply max xs) minX))
                     :height (+ d (- (apply max ys) minY))})))))
 
@@ -184,7 +184,7 @@
     (or (-> element :arguments :segment :region)
         (get-region (get-location (-> element :arguments :object) content) content))
 
-    (reg/region? element) ;;This is already a region
+    (geo/type element) ;;This is already a region
     element
 
     (= (:name element) "group-fixation")
@@ -194,14 +194,14 @@
     (get-region (-> element :arguments :object) content)
 
     (= (:name element) "scan")
-    (reg/prepare
+    (geo/prepare
      {:x (- (-> element :arguments :x) (-> element :arguments :pixel-radius))
       :y (- (-> element :arguments :y) (-> element :arguments :pixel-radius))
       :width (* 2 (-> element :arguments :pixel-radius))
       :height (* 2 (-> element :arguments :pixel-radius))})
 
     (= (type element) java.awt.Rectangle)
-    (reg/prepare element)
+    (geo/prepare element)
 
     (:segment (:arguments element))
     (get-region (:segment (:arguments element)) content)
@@ -250,7 +250,7 @@
 (defn same-region?
   "True if the two objects are located at the same place."
   [element0 element1 locations]
-  (reg/= (get-region element0 locations) (get-region element1 locations)))
+  (geo/= (get-region element0 locations) (get-region element1 locations)))
 
 (defn get-estimated-region
   "Given an object, translate its orginal region rectangle (from when it was last
@@ -258,10 +258,10 @@
   [object content]
   (let [original (:region (:arguments object))
         latest (get-region object content)
-        latest-pt (and latest (reg/center latest))]
+        latest-pt (and latest (geo/center latest))]
     (if (or (nil? original) (nil? latest) (= original latest))
       original
-      (reg/translate-center-to original latest-pt))))
+      (geo/translate-center-to original latest-pt))))
 
 ;; A component might point to an object record that is outdated because there is now
 ;; a new record in vstm for the same object. This function retrieves the most recently

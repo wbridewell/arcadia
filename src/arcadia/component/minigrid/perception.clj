@@ -13,9 +13,9 @@
 (def ^:private ego-row (quot (first ego-grid-size) 2))
 
 (defn- get-semantics [mgpoint]
-    {:category (mg/category mgpoint)
-     :color (mg/color mgpoint)
-     :state (mg/door mgpoint)})
+  {:category (mg/category mgpoint)
+   :color (mg/color mgpoint)
+   :state (mg/door mgpoint)})
 
 ;; 7 x 7 observation matrix with the agent at (3,0)
 ;; get-value expects a (column, row) index
@@ -25,27 +25,26 @@
    :right (get-semantics (cv/get-value mtx ego-column (inc ego-row)))
    :on (get-semantics (cv/get-value mtx ego-column ego-row))})
 
-(defn- perceive [obs component]
+(defn- perceive [obs]
   {:name "minigrid-perception"
    :arguments {:adjacency-info (get-adjacent-semantics (:image obs))
                ;; :mtx (tensor/->jvm (:image obs))
                  ;; :semantic-matrix
                }
    :world nil
-   :source component
    :type "instance"})
 
 (defrecord MinigridPerception [sensor buffer parameters]
   Component
   (receive-focus
-   [component focus content]
-   (let [data (sensor/poll (:sensor component))]
-     (when (:agent-obs data)
-       (reset! (:buffer component) (perceive (:agent-obs data) component)))))
+    [component focus content]
+    (let [data (sensor/poll (:sensor component))]
+      (when (:agent-obs data)
+        (reset! (:buffer component) (perceive (:agent-obs data))))))
 
   (deliver-result
     [component]
-    #{@(:buffer component)}))
+    (list @buffer)))
 
 (defmethod print-method MinigridPerception [comp ^java.io.Writer w]
   (.write w (format "MinigridPerception{}")))

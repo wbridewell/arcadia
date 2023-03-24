@@ -8,7 +8,7 @@
 (def ^:private update-descriptor
   (d/descriptor :name "memory-equality" :type "relation" :world "working-memory"))
 
-(defn make-event [relation-update component]
+(defn make-event [relation-update]
   {:name "event"
    :arguments {:event-name "relation-update"
                :objects nil
@@ -16,19 +16,19 @@
                :old (-> relation-update :arguments :old)
                :new (-> relation-update :arguments :new)}
    :type "instance"
-   :source component
    :world nil})
 
-(defrecord RelationUpdateDetector [buffer] Component
+(defrecord RelationUpdateDetector [buffer]
+  Component
   (receive-focus
-   [component focus content]
-   (->> content
-        (d/filter-matches update-descriptor)
-        (map #(make-event % component))
-        (reset! (:buffer component))))
+    [component focus content]
+    (->> content
+         (d/filter-matches update-descriptor)
+         (map #(make-event %))
+         (reset! (:buffer component))))
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method RelationUpdateDetector [comp ^java.io.Writer w]
   (.write w (format "RelationUpdateDetector{}")))

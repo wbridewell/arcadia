@@ -40,22 +40,21 @@
                :longer longer-dimension
                :object object}
    :world nil
-   :type "instance"
-   :source nil})
+   :type "instance"})
 
 (defrecord LengthComparator [buffer]
   Component
   (receive-focus
-   [component focus content]
-   (reset! (:buffer component) nil)
-   (let [width (g/find-first #(= (:name %) "object-width") content)
-         height (g/find-first #(= (:name %) "object-height") content)]
-     (when (and width height (= (:name focus) "object"))
-       (reset! (:buffer component) (merge (make-comparison focus (compare-dimensions width height))
-                                          {:source component})))))
+    [component focus content]
+    (reset! (:buffer component) nil)
+    (let [width (g/find-first #(= (:name %) "object-width") content)
+          height (g/find-first #(= (:name %) "object-height") content)]
+      (when (and width height (= (:name focus) "object"))
+        (reset! (:buffer component) (make-comparison focus (compare-dimensions width height))))))
+  
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method LengthComparator [comp ^java.io.Writer w]
   (.write w (format "LengthComparator{}")))

@@ -23,29 +23,28 @@
   (:require [arcadia.component.core :refer [Component]]
             [arcadia.utility [descriptors :as d] [objects :as obj]]))
 
-(defn- make-fixation [object component]
+(defn- make-fixation [object]
   {:name "fixation"
    :arguments {:object object
                :reason "memory"}
    :world nil
-   :source component
    :type "instance"})
 
 
 (defrecord VSTMHighlighter [buffer]
   Component
   (receive-focus
-   [component focus content]
-   (let [objects (cond->>
-                  (obj/get-vstm-objects content :tracked? true)
-                  (d/element-matches? focus :name "object" :world nil :tracked? true
-                                    :slot :unallocated)
-                  (cons focus))]
-     (reset! (:buffer component) (doall (map #(make-fixation % component) objects)))))
+    [component focus content]
+    (let [objects (cond->>
+                   (obj/get-vstm-objects content :tracked? true)
+                    (d/element-matches? focus :name "object" :world nil :tracked? true
+                                        :slot :unallocated)
+                    (cons focus))]
+      (reset! (:buffer component) (doall (map #(make-fixation %) objects)))))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method VSTMHighlighter [comp ^java.io.Writer w]
   (.write w (format "VSTMHighlighter{}")))

@@ -11,15 +11,15 @@
 (defrecord Vocalizer [buffer]
   Component
   (receive-focus
-   [component focus content]
+    [component focus content]
    ;; assumes all changes are task relevant
-   (let [vocalize-request (d/first-element content :name "vocalize" :type "environmental-action")]
-       (when vocalize-request (tts/speak (-> vocalize-request :arguments :lexeme)))
-       (reset! (:buffer component) nil)))
+    (let [vocalize-request (d/first-element content :name "vocalize" :type "environmental-action")]
+      (when vocalize-request (tts/speak (-> vocalize-request :arguments :lexeme)))
+      (reset! (:buffer component) nil)))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method Vocalizer [comp ^java.io.Writer w]
   (.write w (format "Vocalizer{}")))

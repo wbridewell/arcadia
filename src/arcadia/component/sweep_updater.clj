@@ -24,35 +24,31 @@
   mode: exclude - inhibit regions that exclude the point
         include - inhibit regions that include the point"
   (:require [arcadia.utility [objects :as obj]]
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             [arcadia.component.core :refer [Component]]))
 
-(defn change-element [value source]
+(defn change-element [value]
   {:name "memorize"
    :arguments {:element
                {:name "sweep-position"
                 :arguments {:usage "inhibitor" :value value :update-on "change"}
                 :type "instance"
-                :world nil
-                :source source}}
+                :world nil}}
    :type "action"
-   :world nil
-   :source source})
+   :world nil})
 
-(defn update-position [position old source]
+(defn update-position [position old]
   {:name "memory-update"
    :arguments {:new
                {:name "sweep-position"
                 :arguments {:usage "inhibitor" :value position :update-on "change"}
                 :type "instance"
-                :world nil
-                :source source}
+                :world nil}
                :old old}
    :type "action"
-   :world nil
-   :source source})
+   :world nil})
 
-(defn track-sweep-position [position content source]
+(defn track-sweep-position [position content]
   ;; assumes that we're only keeping one change conter at a time.
   ;; could expand this so that the counter is tied to a specific object.
   (let [sweep-position (filter #(and (= (:name %) "sweep-position")
@@ -61,13 +57,13 @@
 
                            content)]
     (if (empty? sweep-position)
-      (change-element position source)
-      (do (println "position = " position) (update-position (max position (:value (:arguments (first sweep-position)))) (first sweep-position) source)))))
+      (change-element position)
+      (do (println "position = " position) (update-position (max position (:value (:arguments (first sweep-position)))) (first sweep-position))))))
 
 (def min-area 50)
 (def max-area 20000)
 (defn- task-object? [obj]
-  (let [seg-area (-> obj :arguments :region reg/area)]
+  (let [seg-area (-> obj :arguments :region geo/area)]
       (and (> seg-area min-area) (< seg-area max-area))))
 
 (defrecord SweepUpdater [buffer]
@@ -90,21 +86,21 @@
 
      (cond
        (and (= (:name focus) "object") (task-object? focus) (seq phon-buffer))
-       (let [new-sweep-position (-> focus :arguments :region reg/center)]
+       (let [new-sweep-position (-> focus :arguments :region geo/center)]
          (reset! (:buffer component)
-                 (track-sweep-position new-sweep-position content component)))
+                 (track-sweep-position new-sweep-position content)))
 
        (and (= (:name focus) "memorize")
             (= (:name (:element (:arguments focus))) "number-report"))
        (reset! (:buffer component)
-               (update-position 0.0 (first sweep-position) component))
+               (update-position 0.0 (first sweep-position)))
 
        :else
        (reset! (:buffer component) nil))))
 
   (deliver-result
    [component]
-   #{@(:buffer component)}))
+   (list @buffer)))
 
 (defmethod print-method SweepUpdater [comp ^java.io.Writer w]
   (.write w (format "SweepUpdater{}")))

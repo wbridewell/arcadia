@@ -1,4 +1,4 @@
-Setting up an ARCADIA development environment
+Setting up an ARCADIA development environment for macOS
 =============================================
 
 Clojure is the primary language for ARCADIA development, although components can be written in any language that is accessible through a wrapper in the Java Native Interface. Creating a Clojure development environment is fairly straightforward.
@@ -6,7 +6,7 @@ Clojure is the primary language for ARCADIA development, although components can
 Installing software
 =============================================
 
-1.  Install the latest version of the Java Developers Kit.
+1.  Install the latest version of the Java Developers Kit (version 19.x supported)
     1.  This software is available from [Oracle](http://www.oracle.com/technetwork/java/javase/downloads/index.html) for a variety of platforms. Supposing you've downloaded it to your downloads directory on macOS...
     2.  `cd ~/Downloads`  
         `tar xf openjdk-<version>_osx-x64_bin.tar.gz`  
@@ -14,78 +14,75 @@ Installing software
         
         Run `java -version` to make sure the latest JDK is being used. 
         
-2.  Install [Leiningen](http://leiningen.org) for your platform.
-    1.  If you are working on Linux, the software is likely in your package manager.
-    2.  On macOS, you are encouraged to use the [Homebrew](http://brew.sh) package manager, which includes a Leiningen package.
-3.  Install the [Git](http://git-scm.com) version control software.
-    1.  This is readily available in package managers for Linux and macOS.
-4.  Install the [Maven](http://maven.apache.org) tool for Java project management.
-    1.  This is readily available in package managers for Linux and macOS.
-5.  Retrieve the base ARCADIA workspace from the project's Git repository.
+1.  Install the [Homebrew](http://brew.sh) package manager.
+1.  Install required packages
+    1. [Leiningen](http://leiningen.org) for Clojure project management.
+    1. [Git](http://git-scm.com) version control software.
+    1. [Maven](http://maven.apache.org) for Java project management.
+    1. [Tesseract OCR](https://code.google.com/p/tesseract-ocr/) for OCR capabilities.
+       1.  Recent versions of Tess4J may have problems on macOS because the native library for tesseract is not included in the jar file. If you find this to be the case, see [Stack Overflow](https://stackoverflow.com/questions/21394537/tess4j-unsatisfied-link-error-on-mac-os-x) for the solution.
+    1. [Ant](https://ant.apache.org/) a Java build tool.
+    1. `brew install leiningen git maven tesseract ant`
+1.  Retrieve the base ARCADIA workspace from the project's Git repository.
     1.  See detailed instructions below which also include details on getting OpenCV.
-6.  Install the [Tesseract OCR](https://code.google.com/p/tesseract-ocr/) system and the [Tess4J](http://tess4j.sourceforge.net) Java wrapper. 
-    1.  On macOS, you can use Homebrew to install Tesseract. On Linux, the software is likely available in your package manager.
-    2.  Tess4J should be automatically added to your repository by Leiningen when you start your Clojure REPL. Check your project.clj file for the line `[net.sourceforge.tess4j/tess4j "5.2.1"]`.
-    1.  Recent versions of Tess4J may have problems on macOS because the native library for tesseract is not included in the jar file. If you find this to be the case, see [Stack Overflow](https://stackoverflow.com/questions/21394537/tess4j-unsatisfied-link-error-on-mac-os-x) for the solution.
-7.  To use the gym-minigrid environment, install the Python packages.
-    1. `pip install gym==0.21.0 gym-minigrid==1.0.3`
-    2. there was a change to the render API in gym 0.25.0, so earlier versions are currently needed for compatibility
+1.  To use the Minigrid environment, install the Python packages.
+    1. `pip install gymnasium==0.26.2 Minigrid==2.0.0`
+    1. Gymnasium is a version of OpenAI Gym forked by Farama Foundation for Minigrid. See their [Github](https://github.com/Farama-Foundation/Minigrid) site.
 
-Setting up the git repository
+Setting up the git repository from GitHub
 -----------------------------
 
-1.  git clone https://github.com/wbridewell/arcadia.git
-
+1.  Change to the directory that will contain your Clojure projects (ensure that the pathname does not include any spaces).
+2.  `git clone https://github.com/wbridewell/arcadia.git`        
 
 Setting up OpenCV / Updating OpenCV
 -----------------------------------
 
-The repository includes a Leiningen project tree, a project file, and source code for ARCADIA. However, you will be required to build install certain development libraries and add files to your local repository. Although there are efforts to incorporate [CMU Sphinx](http://cmusphinx.sourceforge.net) and [ZeroMQ](http://zeromq.org), the principle requirement at this time is [OpenCV](http://docs.opencv.org).
+The repository includes a Leiningen project tree, a project file, and source code for ARCADIA. However, you will be required to build install certain development libraries and add files to your local repository. The principle requirement at this time is [OpenCV](http://docs.opencv.org).
 
-Source code for OpenCV is readily available, but on macOS, the Homebrew package is the easiest to prepare.
+Source code for OpenCV is readily available, but on macOS, the Homebrew package is the easiest to set up.
 
-The following should be done in your arcadia directory. (**Important**: These instructions are for version 4.2.0\_3. Change this number to the version you have installed when following them.)
+The following should be done in your arcadia directory. (**Important**: These instructions are for version 4.7.0. Change this number to the version you have installed when following them.)
 
-1.  `brew update`
+1.  The latest version of Homebrew requires the environment variable HOMEBREW_NO_INSTALL_FROM_API to be set to 1 in order to use locally edited formulas. This can be done by adding 
+`export HOMEBREW_NO_INSTALL_FROM_API=1` to your .zshrc file or by executing it in the terminal 
+before following these instructions.
+
+1.  `brew install opencv`
     
-2.  Unless you have already done so, install Apache Ant
+1.  `brew edit opencv`
     
-    brew install ant
+    1.  Change the line `-DBUILD_opencv_java=OFF` to `-DBUILD_opencv_java=ON`
     
-3.  `brew uninstall --force opencv`
-    
-4.  `brew edit opencv`
-    
-    1.  Change line
-        
-    
-    `-DBUILD_opencv_java=OFF`
-    
-              to
-    
-    `-DBUILD_opencv_java=ON`
-    
-5.  `brew install --build-from-source opencv`
-    
-6.  `cp /usr/local/Cellar/opencv/4.2.0_3/share/java/opencv4/opencv-420.jar ./opencv.jar`
-    
-7.  `cp /usr/local/Cellar/opencv/4.2.0_3/share/java/opencv4/libopencv_java420.dylib .`
+1.  `brew reinstall --build-from-source opencv`
+
+1.  The following commands differ depending on whether you are using an Apple Silicon or Intel Mac.
+    1. Intel
+
+      `cp /usr/local/Cellar/opencv/4.7.0/share/java/opencv4/opencv-470.jar ./opencv.jar`
+
+      `cp /usr/local/Cellar/opencv/4.7.0/share/java/opencv4/libopencv_java470.dylib .`
+    1. Apple Silicon
+
+      `cp /opt/homebrew/Cellar/opencv/4.7.0/share/java/opencv4/opencv-470.jar ./opencv.jar`
+
+      `cp /opt/homebrew/Cellar/opencv/4.7.0/share/java/opencv4/libopencv_java470.dylib .`
     
 8.  Create the native code JAR for OpenCV
     
     1.  For macOS, if you don't have a previous version
-        
-        `mkdir -p native/macosx/x86\_64`
-        
-        `mkdir -p target/native/macosx/x86\_64`
-    2.  if you do
-        
-        `mv libopencv_java420.dylib native/macosx/x86_64/`
-        
-        `cp native/macosx/x86_64/libopencv_java420.dylib target/native/macosx/x86_64/`   
-        
-        (This step is supposed to happen automatically, but you may need to do it manually.)`
-    3.  `jar -cMf opencv-native.jar native`
+        1. Intel 
+
+        `mkdir -p native/macosx/x86_64`
+
+        `mv libopencv_java470.dylib native/macosx/x86_64/`
+        1. Apple Silicon
+
+        `mkdir -p native/macosx/aarch64`
+
+        `mv libopencv_java470.dylib native/macosx/aarch64/`
+                
+    1.  `jar -cMf opencv-native.jar native`
         
 9.  Deploy the JAR files using Maven
     1.  `mvn deploy:deploy-file -DgroupId=local -DartifactId=opencv -Dversion=arcadia -Dpackaging=jar -Dfile=opencv.jar -Durl=file:repo`
@@ -100,10 +97,16 @@ The following should be done in your arcadia directory. (**Important**: These in
         
 11.  remove the old versions of the libraries from your local maven cache  
     `rm -r ~/.m2/repository/local/opencv*`
-12.  `lein deps`
+
+
+Running ARCADIA
+-----------------------------------
+
+1.  `lein repl`
+  1. To enable python interoperability, `lein with-profile python repl`
+  1. For Apple Silicon, `lein with-profile aarch64 repl`
+  1. For both, `lein with-profile python,aarch64 repl`
     
-13.  `lein repl`
-    1. To use python libraries, run with `lein with-profile python repl`
-    2. If using native Apple Silicon support, run with `lein with-profile aarch64,python repl`
-    
-14.  `(refresh)`
+1.  Inside the REPL, `(refresh)`
+
+1.  To run a test model, `(arcadia.models.mot-simple/example-run)`

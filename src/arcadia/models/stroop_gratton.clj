@@ -27,28 +27,24 @@
    :arguments {:word word
                :effector :speech}
    :world nil
-   :source nil
    :type "environmental-action"})
 
 (defn- enhance-color [strength]
   {:name "update-color-semantics"
    :arguments {:enhancement strength}
    :world nil
-   :source nil
    :type "automation"})
 
 (defn- enhance-word [strength]
   {:name "update-word-semantics"
    :arguments {:enhancement strength}
    :world nil
-   :source nil
    :type "automation"})
 
 (defn- enhance-response [task-type]
   {:name "update-stroop-response"
    :arguments {:task task-type}
    :world nil
-   :source nil
    :type "automation"})
 
 (defn color-naming-task []

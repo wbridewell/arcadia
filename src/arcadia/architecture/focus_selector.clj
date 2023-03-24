@@ -17,8 +17,9 @@
 
 (defn- select-focus-default 
   "A general default-mode attentional program that is useful across models."
-  [expected]
-  (or (d/rand-element expected :type "action")
+  [expected] 
+  (or (d/rand-element expected :name "task-configuration")
+      (d/rand-element expected :type "action")
       (d/rand-element expected :name "object" :type "instance" :world nil)
       (d/rand-element expected :name "fixation")
       (g/rand-if-any (seq expected))))

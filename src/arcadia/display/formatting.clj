@@ -4,8 +4,11 @@
   (:require clojure.walk
             clojure.string
             clojure.java.io
+            [clojure.string :as string]
+            [arcadia.utility.colors :as colors]
             [arcadia.utility [general :as g] [image :as img] [model :as model]
              [opencv :as cv]]
+            [arcadia.utility.geometry :as geo]
             [arcadia.vision [features :as f] [segments :as seg]]
             [arcadia.display [decompose-data :refer [decompose-data simple-literal?]]
              [image-formatting :as img-format]
@@ -13,11 +16,10 @@
             [clojure.java.shell :refer (sh)])
   (:import [javax.swing Box ImageIcon JFrame JFormattedTextField JPanel JLabel Timer]
            [java.awt GridBagConstraints GridBagLayout]
-           [java.text DecimalFormat NumberFormat]
-           [javax.swing.text NumberFormatter]
-           java.math.RoundingMode
+           java.text.NumberFormat
+           javax.swing.text.NumberFormatter
            javax.swing.border.EmptyBorder
-           [java.awt Dimension Toolkit]
+           [java.awt Color Dimension Toolkit]
            [java.awt.datatransfer DataFlavor StringSelection Transferable]
            [java.awt.event ActionListener MouseAdapter]
            [javax.swing.text.html HTML$Tag HTML$Attribute]))
@@ -88,7 +90,8 @@
   "Set of parameters that will be ignored for captions and headers."
   #{:smart-indent? :one-per-line :key-color :value-color :link-color
     :simple-literal-color :keyword-color :number-color :string-color
-    :pretty-data? :excluded-keys :browsable? :visualizable? :collapsed?})
+    :pretty-data? :excluded-keys :browsable? :visualizable? :collapsed?
+    :display-fn})
 
 (def ^:private char-width-cache
   "Caches the character width for different text sizes." (atom {}))
@@ -127,9 +130,9 @@
   (cond-> (merge params {:font-family "monospace" :smart-indent? true
                          :pretty-points? false})
           (nil? (:string-color params))
-          (assoc :string-color (java.awt.Color. 0 179 0))
+          (assoc :string-color [0 179 0])
           (nil? (:value-color params))
-          (assoc :value-color java.awt.Color/blue)))
+          (assoc :value-color :blue)))
 
 (defn- setup-pretty-data-params-for-caption
   "For captions, just change the :font-family to \"monospace\" for pretty data,
@@ -143,11 +146,10 @@
    the cursor at the specified line number."
   [file]
   (try
-    (sh "atom" file)
+    (sh "code" "-g" file)
     (catch Exception e
-      (println (str "Unable to open file. Please make sure you have the Atom editor "
-                    "installed. If the editor is installed, you may need to select "
-                    "\"Install Shell Commands\" from the Atom menu.")))))
+      (println file)
+      (println))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Utility Fns
@@ -165,11 +167,9 @@
 (defn- add-color
   "Add the specified color to a string, via an html tag."
   [my-string color]
-  (if color
+  (if-let [[r g b] (some-> color colors/->rgb)]
     (format "<span style=\"color:rgb(%d,%d,%d)\">%s</span>"
-            (.getRed color) (.getGreen color)
-            (.getBlue color)
-            my-string)
+            r g b my-string)
     my-string))
 
 (defn- link
@@ -183,13 +183,8 @@
              index (add-color s (or (and colorize? (:browsable? params)
                                          (:link-color params))
                                     (:color params)
-                                    java.awt.Color/black)))
+                                    :black)))
      s)))
-
-(defn- flatten-str
-  "Flatten the arguments before applying str to them."
-  [& args]
-  (apply str (flatten args)))
 
 (defn- strip-html
   "Removes any html tags from a string."
@@ -213,6 +208,12 @@
             ; caption?
             ; (#(subs % 0 (.lastIndexOf % ":")))
             )))
+
+(defn- get-point 
+  "If data is a point, then returns [px py]."
+  [data]
+  (when (= (geo/type data) :point)
+    [(:x data) (:y data)]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Indexing data to support browsing
@@ -253,7 +254,7 @@
         (proxy [ActionListener] []
                (actionPerformed
                 [ae]
-                (.setBackground comp (:text-background params))
+                (.setBackground comp (some-> (:text-background params) colors/->java))
                 (.repaint comp)))
         timer (Timer. 0 listener)]
     (doto timer
@@ -282,7 +283,7 @@
   location, or else nil."
   [e comp]
   (let [text (.. comp getAccessibleContext getAccessibleText)
-        index (.getIndexAtPoint text (.getPoint e))]
+        index (if text (.getIndexAtPoint text (.getPoint e)) -1)]
     (when (>= index 0)
       (when-let [link (.. text (getCharacterAttribute index)
                           (getAttribute (. HTML$Tag A)))]
@@ -307,37 +308,34 @@
    depicts the data, if possible."
   [data debug-data params]
   (let [data (or (:arguments data) data)
-        [px py] (support/get-point data)
         img (img-format/resolve-image
              data debug-data (assoc params :element-annotations nil
                                     :image-scale nil :image-width nil))
+        segment-background (seg/zeros data)
         scale (:visualization-scale params)]
     (cond
       img img
 
-      (and (:region data) (or (:mask data) (:image data)))
+      ;;Visualize a segment as an image on a blank canvas
+      segment-background
       (img-format/resolve-image
-       (or (seg/zeros data) java.awt.Color/black) debug-data
+       segment-background debug-data
        (assoc params :image-width nil :image-height nil :image-scale scale)
-              [[data]])
+       [[data]])
 
-      (and px py)
+      (geo/type data)
       (some-> debug-data support/debug-data->state :image
               (img-format/resolve-image
                debug-data
                (assoc params :image-width nil :image-height nil :image-scale scale)
-               [[[px py] :color (:visualization-color params) :shape nil
+               [[data :color (:visualization-color params) :shape nil :line-width 4
                  :glyph-region nil]]))
 
-      (or (= (type data) java.awt.Rectangle)
-          (= (type data) org.opencv.core.Rect)
-          (:x data) (:y data) (:region data))
-      (some-> debug-data support/debug-data->state :image
-              (img-format/resolve-image
-               debug-data
-               (assoc params :image-width nil :image-height nil :image-scale scale)
-               [[data :color (:visualization-color params) :shape nil
-                 :glyph-region nil]])))))
+      (:segment data)
+      (data->image (:segment data) debug-data params)
+
+      (:object data)
+      (data->image (:object data) debug-data params))))
 
 (declare make-string)
 (declare get-text-comp)
@@ -385,6 +383,7 @@
                          data-registry element-metadata debug-data caption?
                          header? params frame-buffer index-buffer))
                        (.repaint)))))
+           ;;Shift click to view the file/line number where this element originated
            (when (.isShiftDown e)
              (g/when-let* [file (:file element-metadata)
                            line (:line element-metadata)]
@@ -399,7 +398,7 @@
              (.. Toolkit (getDefaultToolkit) (getSystemClipboard)
                  (setContents (StringSelection. (str (or text " ")))
                               nil))
-             (.setBackground comp java.awt.Color/black)
+             (.setBackground comp Color/black)
              (.repaint comp)
              (setup-background-timer comp params)))
           (mousePressed
@@ -410,12 +409,12 @@
                                (getEventIndex-for-JLabel e comp))]
              (reset! index-buffer index)
              (reset! index-buffer nil))
-
+           
            ;;Control click on a link and hold the mouse to bring up a temporary
-           ;;image of its associated ata
+           ;;image of its associated data
            (when-let [index (and (= (.getClickCount e) 1) (.isPopupTrigger e)
                                  (:visualizable? params)
-                                 (getEventIndex-for-JLabel e comp))]
+                                 (or (getEventIndex-for-JLabel e comp) 0))]
              (let [[data _] (get-data index data-registry)
                    img (data->image data debug-data params)]
                (when img
@@ -566,7 +565,7 @@
           (when-let [matrix (when (.isControlDown e)
                               (some-> element-metadata :element f/matrix
                                       (#(when (cv/general-mat-type %) %))))]
-            (g/when-let* [[w h] (cv/size matrix)
+            (g/when-let* [{w :width h :height} (cv/size matrix)
                           x (some-> (.getX e) (- (:x-indent element-metadata))
                                     (/ (.getWidth image))
                                     (#(when (and (>= % 0) (<= % 1)) %))
@@ -593,8 +592,7 @@
             (.. Toolkit (getDefaultToolkit) (getSystemClipboard)
                 (setContents (copyable-image image) nil))
             (let [icon (.getIcon comp)
-                  mat (cv/new-java-mat [(.getIconWidth icon) (.getIconHeight icon)]
-                                       cv/CV_8UC3 0)]
+                  mat (cv/zeros {:width (.getIconWidth icon) :height (.getIconHeight icon)} cv/CV_8UC3)]
               (.setIcon comp (ImageIcon. (img/mat-to-bufferedimage mat)))
               (setup-image-timer comp icon))))))
 
@@ -622,47 +620,6 @@
       [(- (:panel-width params) (or (:caption-width params) 0) indent)
        (or (:center? params) (:word-wrap? params))])))
 
-(defn format-number
-  "Takes a number and the desired max number of digits after the decimal and formats
-   the number so that it will have at most that many digits. Precision can be
-   negative, e.g., -1 means round to the nearest tens, -2 means round to the
-   nearest hundreds, etc. If num is a string, then attempt to format any
-   numbers within that string.
-   If the optional argument preserve-type? is true, then if the number is a float,
-   output it with a single digit after the decimal point, even if that digit is
-   0."
-  ([num precision]
-   (format-number num precision false))
-  ([num precision preserve-type?]
-   (cond
-     (nil? precision)
-     (str num)
-
-     (string? num)
-     (cond->
-      (clojure.string/replace
-       num #"(?<![0-9\.])(([1-9][0-9]*)|0)\.[0-9]+(?![0-9]|\.[0-9])" ;;Find all doubles
-       #(-> % first Double/valueOf (format-number precision)))
-      (neg? precision)
-      (clojure.string/replace
-       #"(?<![0-9\.])(([1-9][0-9]*)|0)(?![0-9]|\.[0-9])" ;;Find all integers
-       #(-> % first Integer/valueOf (format-number precision))))
-
-     (or (Double/isNaN num) (Double/isInfinite num))
-     (str num)
-
-     :else
-     (-> num double Double/toString (BigDecimal.)
-         (.setScale precision RoundingMode/HALF_UP) (.doubleValue)
-         (->> (.format (DecimalFormat.
-                        (flatten-str "#" (when (pos? precision) ".")
-                                     (repeat precision "#")))))
-         (cond->
-          (and preserve-type? (float? num))
-          ((fn [s] (if (not (.contains s "."))
-                     (str s ".0")
-                     s))))))))
-
 (defn- format-string
   "Format a string before displaying it. This is particularly useful for
    handling newlines within the string. Spaces is the number of spaces on the
@@ -670,11 +627,11 @@
   [data spaces color? params]
   (-> (clojure.string/replace data #"\n[ ]*" "\n")
       (clojure.string/split #"\n")
-      (->> (map #(format-number % (:precision params))))
+      (->> (map #(g/format-number % (:precision params))))
       (cond->> color?
                (map #(add-color
                       % (or (:string-color params) (:simple-literal-color params)))))
-      (->> (interpose (flatten-str "\n" (repeat spaces " ")))
+      (->> (interpose (g/flatten-str "\n" (repeat spaces " ")))
            (apply str))))
 
 (defn- get-char-width
@@ -685,11 +642,11 @@
       (let [compA
             (JLabel.
              (format "<html><div style='font-family: monospace; font-size: %sem'>%s</div></html>"
-                     (format-number text-size 1) "A"))
+                     (g/format-number text-size 1) "A"))
             compAB
                   (JLabel.
                    (format "<html><div style='font-family: monospace; font-size: %sem'>%s</div></html>"
-                           (format-number text-size 1) "AB"))
+                           (g/format-number text-size 1) "AB"))
             width
             (- (.getWidth (.getPreferredSize compAB))
                (.getWidth (.getPreferredSize compA)))]
@@ -735,7 +692,8 @@
          (make-string-for-seq
           (rest items) parent registry (+ 1 (get-spaces next-string pre-spaces))
           pre-spaces max-spaces (or multiline? nil) depth params
-          (flatten-str new-string "\n" (repeat pre-spaces " ") next-string))
+          (g/flatten-str new-string "\n" (repeat pre-spaces " ") next-string))
+         
          (make-string-for-seq
           (rest items) parent registry (+ 1 next-spaces) pre-spaces max-spaces
           nil depth params (str new-string " " next-string)))))))
@@ -773,7 +731,7 @@
             index params)
 
       (not (:smart-indent? params))
-      (flatten-str
+      (g/flatten-str
        (link (str name prefix) index params (pos? depth))
        (interpose " "
                   (map #(format-data % index registry pre-spaces max-spaces
@@ -782,16 +740,16 @@
        (link postfix index params (pos? depth)))
 
       one-per-line?
-      (flatten-str
+      (g/flatten-str
        (link (str name prefix) index params (pos? depth))
-       (interpose (flatten-str "\n" (repeat pre-spaces " "))
+       (interpose (g/flatten-str "\n" (repeat pre-spaces " "))
                   (map #(format-data % index registry pre-spaces max-spaces
                                      (inc depth) params)
                        (resolve-items items params)))
        (link postfix index params (pos? depth)))
 
       :else
-      (flatten-str
+      (g/flatten-str
        (link (str name prefix) index params (pos? depth))
        (make-string-for-seq
         (resolve-items items params) index registry pre-spaces max-spaces
@@ -807,15 +765,23 @@
    in which this data is nested, and depth is the current nesting level."
   [data parent registry spaces max-spaces depth params]
   (let [decomp (decompose-data data params)
-        [px py] (support/get-point data)
+        [px py] (when (:pretty-points? params) (get-point data))
         index (and decomp (register-data! data parent registry))]
     ;;If our topmost data item is collapsed, then register a second copy of
     ;;the topmost item that will not be collapsed.
     (when (and (:collapsed? params) index (zero? index))
       (register-data! data 0 registry))
     (cond
+      (and (:display-fn params) index)
+      (link (format-string ((:display-fn params) data) spaces false params)
+            index params false)
+      
+      (:display-fn params)
+      (or (some-> ((:display-fn params) data) (format-string spaces false params))
+          (str nil)) 
+      
       (number? data)
-      (add-color (format-number data (:precision params) (:pretty-data? params))
+      (add-color (g/format-number data (:precision params) :preserve-type? (:pretty-data? params))
                  (or (:number-color params) (:simple-literal-color params)))
 
       (keyword? data)
@@ -847,15 +813,15 @@
                             (format-data k parent registry spaces max-spaces
                                          depth params)
                             "</span>")
-                       (and (simple-literal? k) (:key-color params)))]
+                       (when (simple-literal? k) (:key-color params)))]
         (str key-string " "
              (add-color
               (format-data v parent registry
                            (+ 1 (get-spaces key-string spaces)) max-spaces
                            depth params)
-              (and (simple-literal? v) (:value-color params)))))
+              (when (simple-literal? v) (:value-color params)))))
 
-      (and (:pretty-points? params) px py)
+      px ;;pretty point
       (link (str "(" (format-data px -1 nil 0 max-spaces 0 params) ",&nbsp;"
                  (format-data py -1 nil 0 max-spaces 0 params) ")")
             index params false)
@@ -868,6 +834,9 @@
       (var? data)
       (str data)
 
+      (instance? java.lang.Class data)
+      (g/self-type-string data)
+      
       (instance? java.lang.Object data)
       (g/type-string data)
 
@@ -877,40 +846,44 @@
 (defn- convert-string-to-html
   "Converts a string to html, formats it, and enables word-wrap if desired. Changes
    whitespace to be renderable as html."
-  [text width params]
-  (str
-   "<html><div style='"
+  [text width force-html?
+   {color :color text-size :text-size font-family :font-family bold? :bold? italic? :italic?
+    underline? :underline strike-through? :strike-through? center? :center? pretty-data? :pretty-data?
+    browsable? :browsable? word-wrap? :word-wrap? :as params}]
+  (if (or force-html? width color text-size font-family bold? italic? underline? strike-through? center?
+          pretty-data? browsable? word-wrap? (.contains text "\n") (.contains text "\t"))
+    (str
+     "<html><div style='"
    ;;Apparently width / 1.3 is the magic formula to set the html width correctly
-   (when width
-     (format "width: %dpx;" (int (/ width 1.3))))
-   (when (:color params)
-     (format "color: rgb(%d,%d,%d);"
-             (.getRed (:color params)) (.getGreen (:color params))
-             (.getBlue (:color params))))
-   (when (:text-size params)
-     (format "font-size: %sem;" (-> params :text-size (format-number 2))))
-   (when (:font-family params)
-     (format "font-family: %s;" (:font-family params)))
-   (when (:bold? params)
-     "font-weight: bold;")
-   (when (:italic? params)
-     "font-style: italic;")
-   (when (or (:underline? params) (:strike-through? params))
-     (format "text-decoration:%s%s;"
-             (if (:underline? params) " underline" "")
-             (if (:strike-through? params) " line-through" "")))
-   (when (:center? params)
-     "text-align: center;")
-   "'>"
-   (-> (str (or text " "))
-       (clojure.string/replace
-        " " (if (and width (not (:word-wrap? params)))
-              "&nbsp;" "&#32;"))
-       (clojure.string/replace
-        "\n" (format "<p style=\"margin-top:%d\">"
-                (:paragraph-spacing params)))
-       (clojure.string/replace "\t" "&emsp;"))
-   "</div><html>"))
+     (when width
+       (format "width: %dpx;" (int (/ width 1.3))))
+     (when-let [[r g b] (some-> color colors/->rgb)]
+       (format "color: rgb(%d,%d,%d);" r g b))
+     (when text-size
+       (format "font-size: %sem;" (g/format-number text-size 2)))
+     (when font-family
+       (format "font-family: %s;" font-family))
+     (when bold?
+       "font-weight: bold;")
+     (when italic?
+       "font-style: italic;")
+     (when (or underline? strike-through?)
+       (format "text-decoration:%s%s;"
+               (if underline? " underline" "")
+               (if strike-through? " line-through" "")))
+     (when center?
+       "text-align: center;")
+     "'>"
+     (-> (str (or text " "))
+         (clojure.string/replace
+          " " (if (and width (not word-wrap?))
+                "&nbsp;" "&#32;"))
+         (clojure.string/replace
+          "\n" (format "<p style=\"margin-top:%d\">"
+                       (:paragraph-spacing params)))
+         (clojure.string/replace "\t" "&emsp;"))
+     "</div><html>")
+     (strip-html text)))
 
 (defn- make-string
   "Given some data structure (specified by index, which is a location in the
@@ -922,15 +895,14 @@
                      max-spaces Integer/MAX_VALUE)
         [data parent-index] (get-data! index data-registry)
         spaces (if parent-index
-                 6 0)]
+                 6 0)
+        force-html? (and (string? data) (string/starts-with? data "<"))]
     (cond-> (format-data data parent-index data-registry spaces max-spaces 0 params)
             parent-index
             (->> (str (link "&lt;&lt;" 0 params) " "
                       (link ".." parent-index params) " "))
-            ; caption?
-            ; (str ":")
             true
-            (convert-string-to-html width params))))
+            (convert-string-to-html (when (:center? params) width) force-html? params))))
 
 (defn get-pause-comp
   "Creates a special component for displaying a Pause/Play button. Returns the component
@@ -1042,7 +1014,7 @@
                                     (int (Math/ceil (/ (:element-spacing params) 2))) 0))
           (.setText final-text)
           (.setOpaque true)
-          (.setBackground (:text-background params))
+          (.setBackground (some-> (:text-background params) colors/->java))
           (#(if width
               (set-preferred-width
                % (+ width (:indent params)))
@@ -1062,7 +1034,7 @@
    this amount. When image is provided, there is no need to call resolve-image
    on element to generate the image."
   [element element-metadata debug-data params & {:keys [divisor image] :or {divisor 1}}]
-  (let [[_ expected-height] (img-format/resolve-image-dimensions debug-data params)
+  (let [{expected-height :height} (img-format/resolve-image-dimensions debug-data params)
         expected-height (or expected-height 0)
         indent (or (and (not (:center? params)) (:indent params)) 0)
         spacing (or (:element-spacing params) 0)
@@ -1119,7 +1091,10 @@
         (get-breakpoint-comp element-metadata debug-data params))
 
       (when (-> element-metadata :pause-button?)
-        (get-pause-comp element-metadata debug-data params))
+        (let [pause-comp (get-pause-comp element-metadata debug-data params)
+              new-fn (fn [] (update-pause-comp pause-comp debug-data))]
+          (swap! (:pause-fns @debug-data) conj new-fn)
+          pause-comp))
 
       (when (not= (:element-type params) :image)
         (get-text-comp element false false element-metadata debug-data params))))
@@ -1140,7 +1115,7 @@
 (defn- get-image-comp-height
   "Returns the expected height of an image component, given the current parameters."
   [params]
-  (if-let [[_ height] (img-format/resolve-image-dimensions params)]
+  (if-let [{height :height} (img-format/resolve-image-dimensions params)]
     (+ height (:element-spacing params))
     (throw (panel-height-exception))))
 
@@ -1200,7 +1175,7 @@
   (apply max
          (map (fn [{params :params}]
                 (or (:panel-width params)
-                    (when-let [[width height] (img-format/resolve-image-dimensions params)]
+                    (when-let [{width :width} (img-format/resolve-image-dimensions params)]
                       (when (= (:element-type params) :image)
                         (+ width
                            (if (:center? params) 0 (:indent params)))))

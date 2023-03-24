@@ -15,35 +15,35 @@
   (:require [arcadia.component.core :refer [Component]]
             [arcadia.utility.general :as g]))
 
-(defn- cue-recall [source vocalize id prev]
+(defn- cue-recall [vocalize id prev]
   {:name "wm-recall"
    :arguments {:id id :prev prev :reason "cumulative"
                :subvocalize? (= (:name vocalize) "subvocalize")}
    :world nil
-   :source source
    :type "action"})
 
 ;; buffer: nil, or the recall action if present
-(defrecord RecallLinker [buffer] Component
+(defrecord RecallLinker [buffer]
+  Component
   (receive-focus
-   [component focus content]
-   (reset! (:buffer component) nil)
+    [component focus content]
+    (reset! (:buffer component) nil)
 
-   (let [vocalize (g/find-first #(and (or (= (:name %) "vocalize")
-                                          (= (:name %) "subvocalize"))
-                                      (-> % :arguments :completed?))
-                                content)
-         wm (filter #(= (:world %) "working-memory") content)
-         element (when vocalize
-                   (or (g/find-in (-> vocalize :arguments :element) wm)
-                       (g/find-first #(-> % meta :id (= (:id (:arguments vocalize)))) wm)))
-         next (some-> element meta :next :id)]
-     (when (and vocalize element next)
-       (reset! (:buffer component) (cue-recall component vocalize next element)))))
+    (let [vocalize (g/find-first #(and (or (= (:name %) "vocalize")
+                                           (= (:name %) "subvocalize"))
+                                       (-> % :arguments :completed?))
+                                 content)
+          wm (filter #(= (:world %) "working-memory") content)
+          element (when vocalize
+                    (or (g/find-in (-> vocalize :arguments :element) wm)
+                        (g/find-first #(-> % meta :id (= (:id (:arguments vocalize)))) wm)))
+          next (some-> element meta :next :id)]
+      (when (and vocalize element next)
+        (reset! (:buffer component) (cue-recall vocalize next element)))))
 
   (deliver-result
-   [component]
-   #{@(:buffer component)}))
+    [component]
+    (list @buffer)))
 
 (defmethod print-method RecallLinker [comp ^java.io.Writer w]
   (.write w (format "RecallLinker{}")))

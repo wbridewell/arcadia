@@ -31,7 +31,6 @@
               :task task-kw
               :effector :pointer}
   :world nil
-  :source nil
   :type "action"})
 
 (defn cue-task []

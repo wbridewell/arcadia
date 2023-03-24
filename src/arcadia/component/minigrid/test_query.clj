@@ -2,11 +2,10 @@
   (:require [arcadia.utility.descriptors :as d]
             [arcadia.component.core :refer [Component merge-parameters]]))
 
-(defn- make-query [component]
+(defn- make-query []
   {:name "query"
    :arguments {:key "what"}
    :world "query"
-   :source component
    :type "instance"})
 
 ;; find an episode with a purple door
@@ -14,14 +13,12 @@
   {:name "episode"
    :arguments {:conceptual [(d/descriptor :name "object" :type "instance" :category "door" :color "purple")]}
    :world "query"
-   :source component
    :type "instance"})
 
-(defn- make-task-cue [component]
+(defn- make-task-cue []
   {:name "test"
    :arguments {:cue "recall"}
    :world nil
-   :source component
    :type "instance"}
   )
 
@@ -34,19 +31,19 @@
              (cond (d/element-matches? focus :name "subvocalize" :lexeme "what" :task :recall)
              ;; build an episode to serve as a query 
              ;; build a "what" query form 
-                   [(make-episode component) (make-query component)]
+                   [(make-episode component) (make-query)]
 
                    (and @flag (d/element-matches? new-obj :color "red" :category "door"))
                    ;; only allow one pass through this
                    (do (reset! flag false)
-                       [(make-task-cue component)])
+                       [(make-task-cue)])
                    
                    :else 
                    nil))))
   
   (deliver-result
     [component]
-    (into #{} @(:buffer component))))
+    (into () @buffer)))
 
 (defmethod print-method MinigridTestQuery [comp ^java.io.Writer w]
   (.write w (format "MinigridTestQuery{}")))

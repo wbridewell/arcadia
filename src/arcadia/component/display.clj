@@ -32,7 +32,9 @@
             GraphicsEnvironment
             GridBagConstraints GridBagLayout Insets])
   (:require [arcadia.architecture.registry :as reg]
-            [arcadia.component.core :refer [Component Display Logger merge-parameters]]
+            [arcadia.component.core :refer [Component Display Logger Registry-Accessor
+                                            merge-parameters]]
+            [arcadia.utility.colors :as colors]
             [arcadia.utility [display :as display] [swing :as swing]]
             [arcadia.display [formatting :as dfmt] [support :as dsup]]))
 
@@ -193,27 +195,33 @@
 ;;corresponding parameters for the text in the caption and header. Note that
 ;;when caption or header parameters are nil, the corresponding text parameters
 ;;are used in their place.
-(def ^:parameter word-wrap? "Should word wrapping be enabled? Note that text can
-  wrap only at spaces between words." false)
-(def ^:parameter caption-word-wrap? "Should word wrapping be enabled for captions?
-  Note that text can wrap only at spaces between words." nil)
-(def ^:parameter header-word-wrap? "Should word wrapping be enabled for headers?
-  Note that text can wrap only at spaces between words." nil)
+(def word-wrap? "Should word wrapping be enabled? Note that text can
+  wrap only at spaces between words. NOTE: Word wrap is not working currently." false)
+(def caption-word-wrap? "Should word wrapping be enabled for captions?
+  Note that text can wrap only at spaces between words. NOTE: word wrap is not working currently." nil)
+(def header-word-wrap? "Should word wrapping be enabled for headers?
+  Note that text can wrap only at spaces between words. NOTE: word wrap is not working currently." nil)
 (def ^:parameter center? "Center text?" false)
 (def ^:parameter caption-center? "Center captions?" nil)
 (def ^:parameter header-center? "Center headers?" true)
-(def ^:parameter color "Color of text (nil = default). Use a java.awt.Color object."
+(def ^:parameter color "Color of text (nil = default). Can be a keyword like :red or :blue or a 
+                        [r g b] vector (byte format)."
   nil)
-(def ^:parameter caption-color "Color of captions (nil = default). Use a java.awt.Color
-  object." nil)
-(def ^:parameter header-color "Color of headers (nil = default). Use a java.awt.Color
-  object." nil)
-(def ^:parameter text-background "Color of text backgrounds (nil = none). Use a java.awt.Color
-  object." nil)
-(def ^:parameter caption-background "Color of caption backgrounds (nil = none).
-  Use a java.awt.Color object." nil)
-(def ^:parameter header-background "Color of caption backgrounds (nil = none).
-  Use a java.awt.Color object." (java.awt.Color. 180 180 180))
+(def ^:parameter caption-color
+  "Color of captions (nil = default). Can be a keyword like :red or :blue or a [r g b] vector 
+   (byte format)." nil)
+(def ^:parameter header-color
+  "Color of headers (nil = default). Can be a keyword like :red or :blue or a  [r g b] vector 
+   (byte format)." nil)
+(def ^:parameter text-background
+  "Color of text backgrounds (nil = none). Can be a keyword like :red or :blue or a [r g b] 
+   vector (byte format)." nil)
+(def ^:parameter caption-background
+  "Color of caption backgrounds (nil = none). Can be a keyword like :red or :blue or a [r g b] 
+   vector (byte format)." nil)
+(def ^:parameter header-background
+  "Color of caption backgrounds (nil = none). Can be a keyword like :red or :blue or a [r g b] 
+   vector (byte format)." [180 180 180])
 (def ^:parameter bold? "Should text be bold?" false)
 (def ^:parameter caption-bold? "Should captions be bold?" nil)
 (def ^:parameter header-bold? "Should headers be bold?" nil)
@@ -247,12 +255,15 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;Parameters for formatting text to better display data.
-;;Note that with the exception of precision/pretty-points?, these apply only
-;;to elements and not to headers/captions.
+;;Note that with the exception of precision/pretty-points? these 
+;;apply only to elements and not to headers/captions.
 (def ^:parameter precision "If this is non-nil, then round any numbers to this
  many digits after the decimal point before displaying them." nil)
 (def ^:parameter pretty-points? "If this is true, then display anything that looks
   like a 2D point as (x, y)." true)
+(def ^:parameter display-fn "If this is non-nil, then it should be a function that 
+  that can be applied to a piece of data. It will return a string that will be displayed
+  in the place of that data." nil)
 (def ^:parameter smart-indent? "If this is true, then data structures will
   be indented in a way that makes them easy to inspect. This works best if
   :font-family is \"monospace\", or you can just set :pretty-data? to true, to
@@ -266,7 +277,7 @@
 (def ^:parameter value-color "Color for values in hash-maps. Applies only to simple
   literals, and can be overriden by type-specific color-coding." nil)
 (def ^:parameter link-color "Color for links used to browse through data. Only
-   applicable if :browsable? is true." java.awt.Color/red)
+   applicable if :browsable? is true." :red)
 (def ^:parameter simple-literal-color "Print simple literals (short values, basically
   everything except non-empty collections, Java objects, and functions) in
   this color." nil)
@@ -293,7 +304,7 @@
 (def ^:parameter visualization-scale "Scale at which the background image should
   be displayed when using it as a backdrop for visualizations." 0.5)
 (def ^:parameter visualization-color "Color used when visualizing data."
-  java.awt.Color/cyan)
+  :red)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;Parameters for formatting glyphs that get drawn onto images.
@@ -332,7 +343,7 @@
  that there's room for the scrollpanes...might need to be adjusted if insets of
  panels are ever changed" 0);4)
 (def default-frame-background "background of the display frame, but
-  not the panels" (java.awt.Color. 240 240 240))
+  not the panels" (Color. 240 240 240))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Code for handling the display when there are breakpoints
@@ -400,10 +411,12 @@
     ;;be placed outside the bounds of the screen. This is preferable for
     ;;recording videos because we don't want frames to be crammed together in
     ;;the video.
+    ;;NOTE: Not sure this works anymore. --AML, 2/23/23
     (.setVisible f false)
     (.setLocation f (+ monitor-x (:x params)) (+ monitor-y (:y params)))
     (.pack f)
-   [f main-p]))
+    (.setVisible f true)
+    [f main-p]))
 
 (defn- add-glue
   "Add glue to push everything to the left and to the top of the frame."
@@ -418,27 +431,27 @@
 
 (defn- element-comp
   "Computes a component to display an element of information."
- [element element-metadata debug-data params]
- (let [comp (dfmt/get-element-comp element element-metadata debug-data params)]
-   (cond
-     (seq? comp)
-     (let [panel (JPanel.)
-           c (GridBagConstraints.)]
-       (.setLayout panel (GridBagLayout.))
-       (.setBackground panel nil)
+  [element element-metadata debug-data params]
+  (let [comp (dfmt/get-element-comp element element-metadata debug-data params)]
+    (cond
+      (seq? comp)
+      (let [panel (JPanel.)
+            c (GridBagConstraints.)]
+        (.setLayout panel (GridBagLayout.))
+        (.setBackground panel nil)
 
-       (set! (.gridx c) GridBagConstraints/RELATIVE)
-       (set! (.gridy c) 0)
+        (set! (.gridx c) GridBagConstraints/RELATIVE)
+        (set! (.gridy c) 0)
 
-       (doseq [single-comp comp]
-         (.add panel single-comp c))
-       (add-glue panel (count comp) 0)
-       panel)
+        (doseq [single-comp comp]
+          (.add panel single-comp c))
+        (add-glue panel (count comp) 0)
+        panel)
 
-     (nil? comp)
-     (JLabel.)
+      (nil? comp)
+      (JLabel.)
 
-     :else comp)))
+      :else comp)))
 
 (defn- handle-numbers
   "Checks whether this update should be captioned with a number, and captions it if
@@ -506,7 +519,7 @@
                             1 0)))
     (if solo-panel?
       (.setBackground jpanel nil)
-      (.setBackground jpanel (:panel-background params)))
+      (.setBackground jpanel (some-> (:panel-background params) colors/->java)))
 
     (if solo-panel?
       jpanel
@@ -539,7 +552,7 @@
                                 (/ spacing 2)))
 
      (if solo-panel?
-       (.setBackground jpanel (-> panels first :params :panel-background))
+       (.setBackground jpanel (some-> panels first :params :panel-background colors/->java))
        (.setBackground jpanel default-frame-background))
 
      (dotimes [i n]
@@ -550,7 +563,6 @@
                c)))
 
      (add-glue jpanel (min cols n) (Math/ceil (/ n cols)))
-     (.setVisible frame true)
      (.pack frame)
      (.repaint frame))))
 
@@ -592,7 +604,6 @@
          ;;Add some glue at the end to push everything to the top left position
          (add-glue jpanel 1 new-glue-y)
 
-         (.setVisible frame true)
          (.pack frame)
          (.repaint frame))))
 
@@ -606,61 +617,66 @@
          :runtime-elements (filter #(contains? % :element) info)
          :runtime-glyphs (filter #(contains? % :glyph) info)))
 
-(defrecord DebugDisplay [frame jpanel debug-data runtime-info prev-runtime-info
+(defrecord DebugDisplay [frame jpanel debug-data registry runtime-info prev-runtime-info
                          focus content halted? update-number params]
   Display
   (frame [component] (:frame component))
 
   Logger
   (log-information!
-   [component info]
-   (swap! (:runtime-info component) conj info)
+    [component info]
+    (swap! (:runtime-info component) conj info)
 
-   (when (:instant-updates? params)
+    (when (:instant-updates? params)
      ;;Update our display based on the information that was just added
-     (update-frame-with-new-element
-      frame jpanel debug-data info update-number
-      (dsup/resolve-parameters
-       (add-runtime-information params (reverse @(:runtime-info component)))
-       @focus @content debug-data))
+      (update-frame-with-new-element
+       frame jpanel debug-data info update-number
+       (dsup/resolve-parameters
+        (add-runtime-information params (reverse @(:runtime-info component)))
+        @focus @content @registry debug-data))
 
      ;;If we just added a breakpoint and didn't step past it, we'll need to
      ;;halt until the user indicates we can continue.
-     (when @halted?
-       (swing/invoke-now (update-display-for-breakpoints frame params))
+      (when @halted?
+        (swing/invoke-now (update-display-for-breakpoints frame params))
 
-       (loop []
-         (Thread/sleep 40)
-         (when @halted?
-           (recur)))
-       (swing/invoke-now (update-display-after-breakpoints frame params)))))
+        (loop []
+          (Thread/sleep 40)
+          (when @halted?
+            (recur)))
+        (swing/invoke-now (update-display-after-breakpoints frame params)))))
 
   (reset-logger!
-   [component focus content]
-   (dsup/update-debug-data! (:debug-data component))
-   (reset! (:focus component) focus)
-   (reset! (:content component) content)
-   (reset! (:prev-runtime-info component) (reverse @(:runtime-info component)))
-   (reset! (:runtime-info component) nil))
+    [component focus content]
+    (dsup/update-debug-data! (:debug-data component))
+    (reset! (:focus component) focus)
+    (reset! (:content component) content)
+    (reset! (:prev-runtime-info component) (reverse @(:runtime-info component)))
+    (reset! (:runtime-info component) nil))
 
   (update-logger!
-   [component]
-   (when (or (:refresh-every-cycle? params)
-             (< (-> debug-data deref :cycle) 2))
-     (update-frame
-      frame jpanel debug-data update-number
-      (dsup/resolve-parameters
-       (if (:instant-updates? params)
-         params
-         (add-runtime-information params @(:prev-runtime-info component)))
-       @focus @content debug-data))))
+    [component]
+    (when (or (:refresh-every-cycle? params)
+              (< (-> debug-data deref :cycle) 2))
+      (update-frame
+       frame jpanel debug-data update-number
+       (dsup/resolve-parameters
+        (if (:instant-updates? params)
+          params
+          (add-runtime-information params @(:prev-runtime-info component)))
+        @focus @content @registry debug-data))))
+
+  Registry-Accessor
+  (update-registry!
+    [component registry]
+    (reset! (:registry component) registry))
 
   Component
   (receive-focus
-   [component focus content])
+    [component focus content])
 
   (deliver-result
-   [component]))
+    [component]))
 
 (defmethod print-method DebugDisplay [comp ^java.io.Writer w]
   (.write w "DebugDisplay"))
@@ -668,21 +684,21 @@
 (defn start [& {:as args}]
   (or (:previous-state args)
       (let [p (as-> (merge-parameters args) p
-                    (dsup/clone-parameters p)
-                    (dsup/initialize-parameters true p)
-                    (assoc p :panel-width (dfmt/get-max-panel-width p))
-                    (assoc p :panel-height (dfmt/get-max-panel-height p))
-                    (merge p (dfmt/get-cols-and-rows p))
-                    (assoc p
-                           :variable-display-name (:display-name p)
-                           :variable-display-name? (display/information-fn? (:display-name p))
-                           :display-name (if (display/information-fn? (:display-name p))
-                                           "" (:display-name p))))
+                (dsup/clone-parameters p) ;;clone any atoms, so they'll be distinct from the ones in the model file
+                (dsup/initialize-parameters true p)
+                (assoc p :panel-width (dfmt/get-max-panel-width p))
+                (assoc p :panel-height (dfmt/get-max-panel-height p))
+                (merge p (dfmt/get-cols-and-rows p))
+                (assoc p
+                       :variable-display-name (:display-name p)
+                       :variable-display-name? (dsup/unresolved? (:display-name p))
+                       :display-name (if (dsup/unresolved? (:display-name p))
+                                       "" (:display-name p))))
             halted? (atom false)
             atoms (assoc (reg/control-atoms) :halted? halted? :break-steps (atom 0))
             [frame jpanel] (swing/invoke-now
                             (prepare-frame (JFrame. (:display-name p))
                                            (monitor-loc p) p))]
         (->DebugDisplay
-         frame jpanel (dsup/initialize-debug-data p atoms) (atom nil)
+         frame jpanel (dsup/initialize-debug-data p atoms) (atom nil) (atom nil)
          (atom nil) (atom nil) (atom nil) halted? (atom 0) p))))

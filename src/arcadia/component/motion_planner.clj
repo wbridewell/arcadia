@@ -32,13 +32,11 @@
 
 (def ^:private cycle-time 25)
 
-(defn- push-button [e source]
-  (println "PUSH BUTTON" (-> e :arguments :button-id))
+(defn- push-button [e]
   (when e
     {:name "push-button"
      :arguments {:action-command (-> e :arguments :button-id)}
      :world nil
-     :source source
      :type "environment-action"}))
 
 ;; map predicates that recognize particular types of action requests to
@@ -49,22 +47,19 @@
 
 (def request-schema-maps
   [{:predicate #(and (= (:type %) "action") (= (:name %) "push-button"))
-    :schema #(push-button %1 %2)}])
+    :schema #(push-button %1)}])
 
 (defn- env-action [r m]
   (first (remove nil? (map #(when ((:predicate %) r) (:schema %)) m))))
 
-(defn- request-to-act [r m source]
-  (println "REQUEST TO ACT: ENTER")
+(defn- request-to-act [r m]
   (when-let [s (env-action r m)]
-    (println "REQUEST TO ACT: CONDITION")
-    (s r source)))
+    (s r)))
 
-(defn- report-conflict [winner losers source]
+(defn- report-conflict [winner losers]
   {:name "conflict-resolution"
    :arguments {:kind "action" :winner winner :losers losers}
    :world nil
-   :source source
    :type "instance"})
 
 (defn- wm-tasks [content]
@@ -85,27 +80,24 @@
 (defrecord MotionPlanner [buffer action conflicts delay]
   Component
   (receive-focus
-   [component focus content]
-   (reset! (:action component) nil)
-   (when (pos? @(:delay component))
-     (swap! (:delay component) - cycle-time))
-   (when (<= @(:delay component) 0)
-     (let [[a cs] (resolve-conflict @(:buffer component) content)]
-       (println "MP:" :button-id (-> a :arguments :button-id) :task (-> a :arguments :task))
-       (println "MP:" :task-handle (-> (first (wm-tasks content)) :arguments :handle))
-       (reset! (:action component) a)
-       (reset! (:conflicts component) cs)
-       (reset! (:buffer component) [])))
-   (when (= (:type focus) "action")
-     (swap! (:buffer component) conj focus)
-     (when (<= @(:delay component) 0)
-       (reset! (:delay component) delay-interval))))
+    [component focus content]
+    (reset! (:action component) nil)
+    (when (pos? @(:delay component))
+      (swap! (:delay component) - cycle-time))
+    (when (<= @(:delay component) 0)
+      (let [[a cs] (resolve-conflict @(:buffer component) content)]
+        (reset! (:action component) a)
+        (reset! (:conflicts component) cs)
+        (reset! (:buffer component) [])))
+    (when (= (:type focus) "action")
+      (swap! (:buffer component) conj focus)
+      (when (<= @(:delay component) 0)
+        (reset! (:delay component) delay-interval))))
 
   (deliver-result
-   [component]
-   (println "MOTION-PLANNER:" (count @(:buffer component)))
-   (when-let [env-act (and @(:action component) (request-to-act @(:action component) request-schema-maps component))]
-     #{env-act (report-conflict @(:action component) @(:conflicts component) component)})))
+    [component]
+    (when-let [env-act (and @(:action component) (request-to-act @(:action component) request-schema-maps))]
+      (list env-act (report-conflict @(:action component) @(:conflicts component))))))
 
 
 (defmethod print-method MotionPlanner [comp ^java.io.Writer w]

@@ -83,12 +83,11 @@
 
 (defn- subvocalize
   "Creates a subvocalization request for word"
-  [response component]
+  [response]
   {:name "subvocalize"
    :arguments {:lexeme (:value response)
                :effector (:effector response)}
    :world nil
-   :source component
    :type "action"})
 
 ;; response strength will inherit the strength of the semantics
@@ -109,7 +108,7 @@
 
 
 (defn- gather-responses [m component]
-  (map #(subvocalize (first %) component)
+  (map #(subvocalize (first %))
        (filter #(> (second %) (-> component :parameters :threshold))
                (mapcat vec m))))
 
@@ -179,7 +178,7 @@
 
   (deliver-result
     [component]
-    (into #{} @(:buffer component))))
+    (into () @buffer)))
 
 (defmethod print-method ResponseSTM [comp ^java.io.Writer w]
   (.write w (format "ResponseSTM{}")))

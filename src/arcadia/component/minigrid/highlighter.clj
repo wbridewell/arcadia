@@ -14,11 +14,10 @@
 ;;
 ;;
 
-(defn- make-fixation [segment component]
+(defn- make-fixation [segment]
   {:name "fixation"
    :arguments {:segment segment :reason "minigrid"}
    :world nil
-   :source component
    :type "instance"})
 
 (defrecord MinigridHighlighter [buffer]
@@ -27,13 +26,13 @@
     [component focus content]
     (->> (d/first-element content :name "image-segmentation")
          :arguments :segments
-         (map #(make-fixation % component))
+         (map #(make-fixation %))
          (filter some?)
          (reset! (:buffer component))))
   
   (deliver-result
     [component]
-    (set @(:buffer component))))
+    @buffer))
 
 (defmethod print-method MinigridHighlighter [comp ^java.io.Writer w]
   (.write w (format "MinigridHighlighter{}")))

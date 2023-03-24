@@ -3,13 +3,13 @@
   has not seen that image before. It is designed to be a basic test of episodic
   memory encoding and retrieval."
   (:require [arcadia.utility.attention-strategy :as att]
-            [arcadia.utility.display :refer [i#]]
+            [arcadia.utility.display :refer [blank-canvas i#]]
             [arcadia.utility.general :as g]
             [arcadia.utility.model :as model]
             [arcadia.utility.objects :as obj]
             [arcadia.utility.descriptors :as d]
             [arcadia.utility.tasks :as t]
-            [arcadia.vision.regions :as reg]
+            [arcadia.utility.geometry :as geo]
             [arcadia.models.core]
             [arcadia.architecture.registry :refer [get-sensor]]))
 
@@ -27,8 +27,8 @@
 (defn- inhibits? [inhibitor candidate locations]
   (when-let [region (obj/get-region candidate locations)]
     (if (= (-> inhibitor :arguments :mode) "include")
-      (reg/intersect? region (-> inhibitor :arguments :region))
-      (not (reg/intersect? region (-> inhibitor :arguments :region))))))
+      (geo/intersect? region (-> inhibitor :arguments :region))
+      (not (geo/intersect? region (-> inhibitor :arguments :region))))))
 
 (defn- uninhibited-fixation [fixations inhibitions locations]
   (when (seq inhibitions)
@@ -154,7 +154,7 @@
    ;; specify an episode boundary that will work for the current environment properties. this is, 
    ;; as the kids say, a grotesque hack to avoid premature decision making. 
    (model/add episodic-ltm {:episode-boundaries [(d/descriptor :name "push-button" :type "action")]})
-   (model/add episodic-memory {:event-lifespan 1 :descriptors stimulus-descriptors})
+   (model/add event-memory {:event-lifespan 1 :descriptors stimulus-descriptors})
    (model/add episode-binder)
    (model/add action-detector)
 
@@ -175,12 +175,12 @@
      :image-scale 0.5
      :sensor (get-sensor :stable-viewpoint)
      :elements
-     [[java.awt.Color/black]]
+     [[(blank-canvas :black)]]
      :glyphs
      [[(i# (-> % :content
                (d/filter-elements :name "object-location")))
        :glyph-value (i# (-> % :glyph :arguments :region))
-       :color java.awt.Color/green]]})
+       :color :green]]})
 
    ))
 

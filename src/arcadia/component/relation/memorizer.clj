@@ -22,11 +22,10 @@
 
 (defn- memory-update
   "Update the relation"
-  [old new source]
+  [old new]
   {:name "memory-update"
    :arguments {:old old :new new}
    :type "action"
-   :source source
    :world nil})
 
 (defn- update-relation
@@ -37,35 +36,36 @@
                          wm-relations)]
     (when (or (-> relations first :arguments :context (not= "real"))
               (not= (rel/truth-values old-rels) (rel/truth-values relations)))
-      (memory-update old-rels relations component))))
+      (memory-update old-rels relations))))
 
-(defrecord RelationMemorizer [buffer] Component
+(defrecord RelationMemorizer [buffer]
+  Component
   (receive-focus
-   [component focus content]
-   (let [wm-relations (filter #(and (= (:world %) "working-memory")
-                                    (= (:name %) "relation")) content)
+    [component focus content]
+    (let [wm-relations (filter #(and (= (:world %) "working-memory")
+                                     (= (:name %) "relation")) content)
          ;; relations waiting to be updated
-         updating-relations (mapcat (comp :new :arguments)
-                                    (filter (fn [m] (and (= (:name m) "memory-update")
-                                                         (:new (:arguments m))
-                                                         (some #(rel/valid-relation? %)
-                                                               (:new (:arguments m)))))
-                                            content))]
-     (->> content
-          (filter (fn [r] (and (rel/valid-relation? r)
-                               (nil? (:world r))
-                               (not-any? (partial rel/relation-equals r)
-                                         updating-relations))))
+          updating-relations (mapcat (comp :new :arguments)
+                                     (filter (fn [m] (and (= (:name m) "memory-update")
+                                                          (:new (:arguments m))
+                                                          (some #(rel/valid-relation? %)
+                                                                (:new (:arguments m)))))
+                                             content))]
+      (->> content
+           (filter (fn [r] (and (rel/valid-relation? r)
+                                (nil? (:world r))
+                                (not-any? (partial rel/relation-equals r)
+                                          updating-relations))))
           ;; ignore value, include context
-          (group-by #(rel/to-string % false true))
-          (map #(update-relation (g/distinctp rel/relation-equals (val %))
-                                 component wm-relations))
-          (remove nil?)
-          (reset! (:buffer component)))))
+           (group-by #(rel/to-string % false true))
+           (map #(update-relation (g/distinctp rel/relation-equals (val %))
+                                  component wm-relations))
+           (remove nil?)
+           (reset! (:buffer component)))))
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method RelationMemorizer [comp ^java.io.Writer w]
   (.write w (format "RelationMemorizer{}")))

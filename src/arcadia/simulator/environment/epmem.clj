@@ -3,7 +3,8 @@
  arcadia.simulator.environment.epmem
   (:require [arcadia.simulator.environment.core :refer [Environment]]
             [arcadia.utility [image :as img] [opencv :as cv]]
-            [clojure.math.numeric-tower :refer [floor]])
+            [clojure.math.numeric-tower :refer [floor]]
+            [clojure.data.generators :as dgen])
   (:import [javax.swing JFrame]
            [java.awt Color RenderingHints Polygon]
            [java.awt.image BufferedImage]))
@@ -130,9 +131,9 @@
 ;; the episodic memory case. this might be a confound for experiments 
 ;; using people, but for the initial arcadia components, it'll be fine.
 (defn- next-stimulus []
-  (let [location (rand-nth locations)]
-    [{:shape (rand-nth shapes) :color (rand-nth colors) :location location}
-     {:shape (rand-nth shapes) :color (rand-nth colors) :location (opposite-location location)}]))
+  (let [location (dgen/rand-nth locations)]
+    [{:shape (dgen/rand-nth shapes) :color (dgen/rand-nth colors) :location location}
+     {:shape (dgen/rand-nth shapes) :color (dgen/rand-nth colors) :location (opposite-location location)}]))
 
 ;; always the same stimulus to debug recall
 #_(defn- next-stimulus []

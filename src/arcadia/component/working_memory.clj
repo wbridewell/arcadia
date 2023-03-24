@@ -34,6 +34,7 @@
   http://doi.org/10.1146/annurev-psych-010814-015031"
   (:require [arcadia.component.core :refer [Component merge-parameters]]
             [clojure.walk :as walk]
+            [clojure.data.generators :as dgen]
             (arcadia.utility [general :as g]
                              [objects :as obj]
                              [possible-relations :as prel])))
@@ -106,16 +107,15 @@
                                   (:min-activation params)
                                   (:max-activation params))
                      1.0)]
-    (when (>= activation (rand))
+    (when (>= activation (dgen/double))
       element)))
 
 ;; HACK:
 ;; Used for a model in progress.
-(defn- remember-possibility [possibility source]
+(defn- remember-possibility [possibility]
   {:name (:name possibility)
    :arguments (:arguments possibility)
-   :world "working-memory"
-   :source source
+   :world "working-memory" 
    :type "possibility"})
 
 (defn- update-in-wm
@@ -128,10 +128,10 @@
 
 (defn- remember-generic
   "Create a working memory version of the element, removing the element's
-   :world and :source keys."
+   :world keys."
   [element source]
   (vary-meta
-   (merge (consolidate element) {:world "working-memory" :source source})
+   (merge (consolidate element) {:world "working-memory"})
    assoc :activation (or (-> element meta :activation)
                          (:max-activation (:params source)))))
 
@@ -147,22 +147,20 @@
 (defn- memory-equality
   "Creates a relationship between an old working-memory item and
    its new version with updated VSTM objects"
-  [old new reason component]
+  [old new reason]
   {:name "memory-equality"
    :arguments {:old old :new new :reason reason}
    :type "relation"
-   :source component
    :world "working-memory"})
 
 (defn- memorization-feedback
   "Creates an interlingua element showing the success of a memorization.
    Provides a copy of the :old element and the :new WM version for other
    components to use."
-  [old new component]
+  [old new]
   {:name "new-memory"
    :arguments {:old old :new new}
    :type "relation"
-   :source component
    :world nil})
 
 (defn- get-refreshed-element
@@ -218,9 +216,9 @@
      (let [old (or (:elements (:arguments focus))
                    (list (:element (:arguments focus))))
            new (map #(remember-generic % component) old)]
-       (reset! (:new-memories component) (map #(memorization-feedback %1 %2 component) old new))
+       (reset! (:new-memories component) (map #(memorization-feedback %1 %2) old new))
        (reset! (:equality-relations component)
-               (list (memory-equality nil (list new) focus component)))
+               (list (memory-equality nil (list new) focus)))
        (swap! (:buffer component) concat new))
 
 
@@ -235,7 +233,7 @@
        (reset! (:buffer component)
                (concat (remove #(prel/same-possible-relations? % (first (:elements (:arguments focus))))
                                @(:buffer component))
-                       (map #(remember-possibility % component) (:elements (:arguments focus)))))
+                       (map #(remember-possibility %) (:elements (:arguments focus)))))
 
        ;; Update the items in working memory, and create
        ;; a memory-equality to broadcast completion of the update
@@ -252,7 +250,7 @@
                                 old n)
                            n)]
                  (reset! (:equality-relations component)
-                         (list (memory-equality old new focus component)))
+                         (list (memory-equality old new focus)))
                  (reset! (:new-memories component) nil)
                  (concat (remove (set old) @(:buffer component))
                          new))))
@@ -279,12 +277,12 @@
                      @(:buffer component)))))))
   (deliver-result
    [component]
-   (set (concat @(:equality-relations component)
-                @(:new-memories component)
-                (if (:deterministic? (:params component))
-                  @(:buffer component)
-                  (set (remove nil? (map #(retrieve % (:params component))
-                                         @(:buffer component)))))))))
+   (concat @(:equality-relations component)
+           @(:new-memories component)
+           (if (:deterministic? (:params component))
+             @(:buffer component)
+             (set (remove nil? (map #(retrieve % (:params component))
+                                    @(:buffer component))))))))
 
 
 (defmethod print-method WorkingMemory [comp ^java.io.Writer w]

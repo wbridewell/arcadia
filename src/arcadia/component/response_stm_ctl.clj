@@ -109,12 +109,11 @@
 
 (defn- subvocalize
   "Creates a subvocalization request for word"
-  [response component]
+  [response]
   {:name "subvocalize"
    :arguments {:lexeme response
                :effector :articulator}
    :world nil
-   :source component
    :type "action"})
 
 (defn- conflict-report [component]
@@ -124,32 +123,31 @@
                  :response-value response-value
                  :conflict-values (remove #{response-value} (keys @(:semantic-map component)))}
      :world nil
-     :source component
      :type "instance"}))
 
 (defn- gather-responses [m component]
-  (map #(subvocalize (first %) component)
+  (map #(subvocalize (first %))
        (filter #(> (second %) @(:threshold component))
                (into [] m))))
 
 (defrecord ResponseSTMCTL [buffer semantic-map response-type inhibit-conflict? threshold control]
   Component
   (receive-focus
-   [component focus content]
+    [component focus content]
 
-   (display/elem "SEM MAP  " @semantic-map)
-   (display/elem "THRESHOLD  " @threshold)
-   (display/elem "CONTROL " @control)
+    (display/elem "SEM MAP  " @semantic-map)
+    (display/elem "THRESHOLD  " @threshold)
+    (display/elem "CONTROL " @control)
 
-   (when-let [task-type (d/first-element content :name "update-stroop-response" :type "automation")]
-     (reset! (:response-type component) (-> task-type :arguments :task)))
+    (when-let [task-type (d/first-element content :name "update-stroop-response" :type "automation")]
+      (reset! (:response-type component) (-> task-type :arguments :task)))
 
-   (when-let [new-parameters (d/first-element content :name "update-response-parameters" :type "automation")]
-     (reset! (:threshold component) (-> new-parameters :arguments :threshold))
-     (reset! (:control component) (-> new-parameters :arguments :control-value))
-     (reset! (:inhibit-conflict? component) (-> new-parameters :arguments :conflict?)))
+    (when-let [new-parameters (d/first-element content :name "update-response-parameters" :type "automation")]
+      (reset! (:threshold component) (-> new-parameters :arguments :threshold))
+      (reset! (:control component) (-> new-parameters :arguments :control-value))
+      (reset! (:inhibit-conflict? component) (-> new-parameters :arguments :conflict?)))
 
-   (let [s (d/filter-elements content :name "semantics")]
+    (let [s (d/filter-elements content :name "semantics")]
      ;; set to 1 to get true and see proper SOA results
 ;     (reset! (:inhibit-conflict? component) (= (count s) 100))
 
@@ -167,38 +165,38 @@
      ;;
      ;; NOTE 12/8/2021
      ;; we may be able to move this functionality to stroop-control at some point
-     (when (and (= (count s) 1)
-                @(:response-type component)
-                (not= (-> s first :arguments :path) @(:response-type component)))
+      (when (and (= (count s) 1)
+                 @(:response-type component)
+                 (not= (-> s first :arguments :path) @(:response-type component)))
 
-       (reset! (:inhibit-conflict? component) true))
+        (reset! (:inhibit-conflict? component) true))
     ;; (reset! (:inhibit-conflict? component) false)
 
-     (swap! (:semantic-map component) update-support
-            (into [] (accumulate-support s @(:response-type component) @(:inhibit-conflict? component) @(:threshold component) @(:control component))))
-     (display/element-for :display.status "Semantic Layer"
-                          (into [] @(:semantic-map component))))
+      (swap! (:semantic-map component) update-support
+             (into [] (accumulate-support s @(:response-type component) @(:inhibit-conflict? component) @(:threshold component) @(:control component))))
+      (display/element-for :display.status "Semantic Layer"
+                           (into [] @(:semantic-map component))))
 
    ;; build a response map from the semantics (unlike semantics, there is no memory at the response level)
    ;; grab responses that pass threshold
-   (reset! (:buffer component)
-           (gather-responses @(:semantic-map component) component))
+    (reset! (:buffer component)
+            (gather-responses @(:semantic-map component) component))
 
    ;; once responses are issued, empty the data structure.
-   (when (seq @(:buffer component))
-     (when (and (> (count @(:semantic-map component)) 1)
-                (empty? (filter #(= (first %) "NEUTRAL") @(:semantic-map component))))
-       (swap! (:buffer component) conj (conflict-report component)))
-     (reset! (:semantic-map component) {}))
+    (when (seq @(:buffer component))
+      (when (and (> (count @(:semantic-map component)) 1)
+                 (empty? (filter #(= (first %) "NEUTRAL") @(:semantic-map component))))
+        (swap! (:buffer component) conj (conflict-report component)))
+      (reset! (:semantic-map component) {}))
    ;; there's some bleed over during intertrial activity, so reset this because
    ;; the push button response is supposed to indicate "ready for next trial"
-   (when (d/some-element content :name "push-button" :type "environment-action" :action-command :go-button)
+    (when (d/some-element content :name "push-button" :type "environment-action" :action-command :go-button)
      ;; (reset! (:inhibit-conflict? component) false)
-     (reset! (:semantic-map component) {})))
+      (reset! (:semantic-map component) {})))
 
   (deliver-result
     [component]
-    (into #{} @(:buffer component))))
+    (into () @buffer)))
 
 (defmethod print-method ResponseSTMCTL [comp ^java.io.Writer w]
   (.write w (format "ResponseSTMCTL{}")))

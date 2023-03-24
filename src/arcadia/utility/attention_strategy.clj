@@ -1,23 +1,47 @@
 (ns
   ^{:doc "Helper functions for constructing attentional strategies."}
   arcadia.utility.attention-strategy
-  (:require [arcadia.utility [objects :as obj] [general :as g] [descriptors :as d]]))
+  (:require [arcadia.utility.objects :as obj] 
+            [arcadia.utility.general :as g]
+            [arcadia.utility.descriptors :as d]))
 
-(defn default-strategy 
+(defn strategy-tier
+  "Creates a function that matches descriptors from left to right to a sequence 
+   of interlingua elements. If the descriptor matches an element in the sequence,
+   the element is returned, otherwise the next descriptor is applied. If no 
+   descriptors match any of the elements, returns nil"
+  ([descriptor]
+   (partial d/rand-match descriptor))
+  ([descriptor & more]
+   ;; return a function that walks through a sequence of descriptors in order and 
+   ;; returns the first element that matches one of those descriptors
+   ;;
+   ;; the function should take an argument, which will eventually be accessible content
+   ;;
+   ;; sequence of partial functions that expect content / a sequence of interlingua elements
+   ;; as an argument
+   ;;
+   ;; loop through each of the partials and apply them to content
+   (fn [c] (loop [f (map #(partial d/rand-match %) (cons descriptor more))]
+             (when (first f)
+               (if-let [match ((first f) c)]
+                 match
+                 (recur (rest f))))))))
+
+(def default-strategy
   "A general default-mode attentional program that is useful across models."
-  [expected]
-  (or (d/rand-element expected :type "action")
-      (d/rand-element expected :name "object" :type "instance" :world nil)
-      (d/rand-element expected :name "fixation")
-      (g/rand-if-any (seq expected))))
-
+  (strategy-tier (d/descriptor :name "task-configuration") 
+                 (d/descriptor :name "object" :type "instance" :world nil)
+                 (d/descriptor :name "fixation")
+                 (d/descriptor :name d/ANY-VALUE)))
 
 (defn get-object-fixations
   "Returns a seq of fixations with the specified key/value pairings in their :object argument."
   [content & args]
   (d/filter-elements content :name "fixation"
-                     :object (if (empty? args) some?
-                                 #(d/descriptor-matches? (apply d/descriptor args) %))))
+                     :object (if (empty? args)
+                               some?
+                               #(d/descriptor-matches? (apply d/descriptor args) %))))
 
 ;; This fn provides a means of inhibiting fixation request that match objects currently
 ;; stored in VSTM. You can specify no arguments, indicating we want to inhibit everything

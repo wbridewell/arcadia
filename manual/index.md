@@ -7,7 +7,7 @@ The ARCADIA Project
     1. [Data Channels](datat_channels.md)
 1. [Programming in ARCADIA](programming_arcadia.md)
     1. [Descriptors](descriptors.md)
-    1. [Episodic Memory](episodic_memory.md)
+    1. [Event Memory](event_memory.md)
     1. [Stimulus-Response Links](srlinks.md)
     1. [Task Representations](tasks.md)
     1. [Relations](relations.md)

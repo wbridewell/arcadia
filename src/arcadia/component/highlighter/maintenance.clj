@@ -36,7 +36,7 @@
   (:require [clojure.math.numeric-tower :as math]
             [arcadia.component.core :refer [Component merge-parameters]]
             [arcadia.utility [descriptors :as d] [objects :as obj]]
-            [arcadia.vision.regions :as reg]))
+            [arcadia.utility.geometry :as geo]))
 
 (def ^:parameter min-delta
   "minimum change in position that will count as perceptable motion"
@@ -81,7 +81,7 @@
   (let [region (:region tdata)]
     (cond
       (and region (not (:collision? tdata)))
-      (reg/center region)
+      (geo/center region)
 
       region
       {:x (:expected-x old-tdata)
@@ -219,7 +219,7 @@
      (if (and region next-x next-y)
        {:expected-x next-x
         :expected-y next-y
-        :expected-region (reg/translate-center-to region {:x next-x :y next-y})}
+        :expected-region (geo/translate-center-to region {:x next-x :y next-y})}
        {}))))
 
 (defn- update-precise-directions
@@ -258,30 +258,28 @@
     (when region
       {:min-area
        (if min-area
-         (min min-area (reg/area region))
-         (reg/area region))
+         (min min-area (geo/area region))
+         (geo/area region))
        :max-area
        (if max-area
-         (max max-area (reg/area region))
-         (reg/area region))})))
+         (max max-area (geo/area region))
+         (geo/area region))})))
 
 (defn- make-fixations
   "Generates a maintenance fixation which includes attended object trajectory information, and
   also generates a collision fixation if the attended object is undergoing a collision."
-  [object tdata params source]
+  [object tdata params]
   (conj (cond
           (:collision? tdata)
           [{:name "fixation"
             :arguments {:object object :reason "collision"
                         :expected-region (:expected-region tdata)}
             :world nil;;"vstm"
-            :source source
             :type "instance"}]
           (:post-collision? tdata)
           [{:name "fixation"
             :arguments {:object object :reason "post-collision"}
             :world nil;;"vstm"
-            :source source
             :type "instance"}])
 
         {:name "fixation"
@@ -297,7 +295,6 @@
                      :expected-region (when (:collision? tdata)
                                         (:expected-region tdata))}
          :world nil;;"vstm"
-         :source source
          :type "instance"}))
 
 ;;This triggers off of either:
@@ -342,11 +339,11 @@
        (reset! (:trajectory-data component) new-tdata)
        (reset! (:trajectory-data component) {}))
      (reset! (:buffer component)
-             (when region (make-fixations object new-tdata parameters component)))))
+             (when region (make-fixations object new-tdata parameters)))))
 
   (deliver-result
     [component]
-    (set @(:buffer component))))
+    @buffer))
 
 (defmethod print-method MaintenanceHighlighter [comp ^java.io.Writer w]
   (.write w (format "MaintenanceHighlighter{}")))

@@ -37,7 +37,9 @@
   (2) S ranges from 0 to 1.
   (3) V ... no idea, but don't need it."
   (:require [arcadia.component.core :refer [Component merge-parameters]]
-            [arcadia.utility [general :as g] [image :as img] [opencv :as cv]]))
+            [arcadia.utility.general :as g]
+            [arcadia.utility.image :as img]
+            [arcadia.utility.opencv :as cv]))
 
 (def ^:parameter ^:required sensor
   "a sensor used to generate proto-object representations from visual input (required)"
@@ -45,22 +47,21 @@
 
 (def ^:parameter target-color "name of the target color, as a string" nil)
 (def ^:parameter excluded-colors "set of colors for segments that should not be
-  highlighted" #{"black"})
+  highlighted" #{"black" "gray"})
 
 (def ^:parameter threshold "minimum percentage of pixels required to be labeled a color" 0.5)
 
 (def ^:parameter color-ranges "hashmap mapping color names (strings) to low/high HSV ranges"
   img/HSV-color-ranges)
 
-(def ^:parameter segment-type "element name for the segments used for highlighting" 
+(def ^:parameter segment-type "element name for the segments used for highlighting"
   "image-segmentation")
 
 (defn- report-color
   "Suppresses a particular color from being reported when multiple valid descriptions detected"
   [valid-colors dispreferred-color]
-    ;(println valid-colors dispreferred-color)
   (if (<= (count valid-colors) 1) (first valid-colors)
-    (first (remove #(= % dispreferred-color) valid-colors))))
+      (first (remove #(= % dispreferred-color) valid-colors))))
 
 (defn- get-color
   "Returns a color string for the segment or nil if it is not recognized."
@@ -70,6 +71,7 @@
     (report-color (filter
                    #(-> (img/color-mask mat (get color-ranges %))
                         (cv/mean-value :mask (:mask segment))
+                        ;; ((fn [x] (println "MEAN VALUE" % ":" x) x))
                         (> (* 255 (:threshold parameters))))
                    (keys color-ranges)) "white")))
 
@@ -107,28 +109,27 @@
                  :color color
                  :brightness (get-brightness segment color (:parameters component))}
      :world nil
-     :source component
      :type "instance"}))
 
 (defrecord ColorHighlighter [sensor parameters buffer]
   Component
   (receive-focus
-   [component focus content]
-   (->> (get-segments content (:segment-type (:parameters component)) (:sensor component))
-        (map #(make-fixation % sensor component))
-        (filter (if (:target-color (:parameters component))
-                  #(some-> % :arguments :color
-                           (= (:target-color (:parameters component))))
+    [component focus content]
+    (->> (get-segments content (:segment-type (:parameters component)) (:sensor component))
+         (map #(make-fixation % sensor component))
+         (filter (if (:target-color (:parameters component))
+                   #(some-> % :arguments :color
+                            (= (:target-color (:parameters component))))
 
-                  #(and (-> % :arguments :color)
-                        (nil? ((:excluded-colors (:parameters component))
-                               (-> % :arguments :color))))))
-        (reset! (:buffer component))))
+                   #(and (-> % :arguments :color)
+                         (nil? ((:excluded-colors (:parameters component))
+                                (-> % :arguments :color))))))
+         (reset! (:buffer component))))
 
 
   (deliver-result
-   [component]
-   (set @(:buffer component))))
+    [component]
+    @buffer))
 
 (defmethod print-method ColorHighlighter [comp ^java.io.Writer w]
   (.write w (format "ColorHighlighter{}")))

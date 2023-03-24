@@ -69,7 +69,7 @@ This supercedes inner-contours?" false)
   "Convert white pixels to black ones."
   [image-mat]
   (let [mask (cv/bitwise-not! (cv/in-range image-mat [240 240 240] [255 255 255]))]
-    (-> image-mat (cv/copy :mask mask) (cv/morphology-ex! cv/MORPH_OPEN [4 4]))))
+    (-> image-mat (cv/copy :mask mask) (cv/morphology-ex! cv/MORPH_OPEN {:width 4 :height 4}))))
 
 (defn- apply-min-saturation
   "Change everything below the min saturation to black before segmenting."
@@ -182,7 +182,7 @@ This supercedes inner-contours?" false)
               (:min-saturation params) (apply-min-saturation (:min-saturation params)))
       (get-input params) (cv/canny 50 255)
       (cond->
-       (:smooth-image? params) (cv/gaussian-blur! [3 3])
+       (:smooth-image? params) (cv/gaussian-blur! {:width 3 :height 3})
        (:all-contours? params) (cv/find-segments-by-contour cv/RETR_LIST)
        (:inner-contours? params) (-> (cv/find-segments-by-contour cv/RETR_TREE)
                                      (->> (mapcat #(get-smallest-subsegments % params))))
@@ -204,16 +204,15 @@ This supercedes inner-contours?" false)
 
   (deliver-result
    [component]
-   #{{:name "image-segmentation"
-      :arguments {:segments (when (not (:saccading? (:arguments @(:gaze-buffer component))))
-                              @(:buffer component))
-                  :true-segments @(:buffer component)
-                  :image @(:data-buffer component)
-                  :sensor (:sensor component)
-                  :gaze @(:gaze-buffer component)}
-      :world nil
-      :source component
-      :type "instance"}}))
+   (list  {:name "image-segmentation"
+           :arguments {:segments (when (not (:saccading? (:arguments @(:gaze-buffer component))))
+                                   @(:buffer component))
+                       :true-segments @(:buffer component)
+                       :image @(:data-buffer component)
+                       :sensor (:sensor component)
+                       :gaze @(:gaze-buffer component)}
+           :world nil
+           :type "instance"})))
 
 (defmethod print-method ImageSegmenter [comp ^java.io.Writer w]
   (.write w (format "ImageSegmenter{}")))

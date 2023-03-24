@@ -27,28 +27,24 @@
    :arguments {:word word
                :effector :speech}
    :world nil
-   :source nil
    :type "environmental-action"})
 
 (defn- enhance-color [strength]
   {:name "update-color-semantics"
    :arguments {:enhancement strength}
    :world nil
-   :source nil
    :type "automation"})
 
 (defn- enhance-word [strength]
   {:name "update-word-semantics"
    :arguments {:enhancement strength}
    :world nil
-   :source nil
    :type "automation"})
 
 (defn- enhance-response [task-type]
   {:name "update-stroop-response"
    :arguments {:task task-type}
    :world nil
-   :source nil
    :type "automation"})
 
 (defn color-naming-task []
@@ -140,8 +136,8 @@
    (model/add working-memory)
    (model/add wm-handle-refresher)
    (model/add display.status
-              {:display-name "Status" :panel-width 400 :panel-height 150
-               :caption-width 110 :precision 2
+              {:display-name "Status" :panel-width 400 :extra-panel-rows 1
+               :caption-width 130 :precision 2
                :x 0 :y 400
                :elements
                [["Task" task-name]]})
