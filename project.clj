@@ -2,7 +2,7 @@
   :description "A framework for building attention-centric cognitive systems."
   :url "https://www.nrl.navy.mil"
   :license {:name "see LICENSE file"}
-  :jvm-opts ["-Djava.library.path=/usr/lib:/usr/local/lib:/usr/local/opt/opencv/share/OpenCV/java/" 
+  :jvm-opts ["-Djava.library.path=/usr/lib:/usr/lib/jni:/usr/local/lib:/usr/local/opt/opencv/share/OpenCV/java/" 
              "-Djna.library.path=/usr/local/lib"]
   :plugins [[lein-codox "0.10.8"]
             [lein-marginalia "0.9.1"]
