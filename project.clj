@@ -2,7 +2,7 @@
   :description "A framework for building attention-centric cognitive systems."
   :url "https://www.nrl.navy.mil"
   :license {:name "see LICENSE file"}
-  :jvm-opts ["-Djava.library.path=/usr/lib:/usr/local/lib:/usr/local/opt/opencv/share/OpenCV/java/" 
+  :jvm-opts ["-Djava.library.path=/usr/lib:/usr/lib/jni:/usr/local/lib:/usr/local/opt/opencv/share/OpenCV/java/" 
              "-Djna.library.path=/usr/local/lib"]
   :plugins [[lein-codox "0.10.8"]
             [lein-marginalia "0.9.1"]
@@ -27,7 +27,7 @@
                  [net.mikera/core.matrix "0.62.0"]
                  [net.mikera/vectorz-clj "0.48.0"]
                  [codox-theme-rdash "0.1.2"]
-                 [cnuernber/dtype-next "10.000-beta-35" :exclusions [ch.qos.logback/logback-classic org.clojure/tools.logging]]
+                 [cnuernber/dtype-next "10.000-beta-" :exclusions [ch.qos.logback/logback-classic org.clojure/tools.logging]]
                  ] 
   :codox {:project {:name "ARCADIA"
                     :themes [:rdash]
