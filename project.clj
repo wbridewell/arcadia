@@ -27,7 +27,7 @@
                  [net.mikera/core.matrix "0.62.0"]
                  [net.mikera/vectorz-clj "0.48.0"]
                  [codox-theme-rdash "0.1.2"]
-                 [cnuernber/dtype-next "10.000-beta-" :exclusions [ch.qos.logback/logback-classic org.clojure/tools.logging]]
+                 [cnuernber/dtype-next "10.000-beta-40" :exclusions [ch.qos.logback/logback-classic org.clojure/tools.logging]]
                  ] 
   :codox {:project {:name "ARCADIA"
                     :themes [:rdash]
