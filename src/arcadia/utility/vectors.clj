@@ -176,18 +176,19 @@
   "Given two points defining a line segment, returns
   the slope and y-intercept of the line y=mx+b as [m,b]."
   [[x0 y0] [x1 y1]]
-  (let [m (try (/ (- y1 y0) (- x1 x0)) (catch java.lang.ArithmeticException e Integer/MAX_VALUE))]
-    [m (- y0 (* m x0))]))
+  (let [m (try (/ (clojure.core/- y1 y0) (clojure.core/- x1 x0))
+               (catch java.lang.ArithmeticException e Integer/MAX_VALUE))]
+    [m (clojure.core/- y0 (clojure.core/* m x0))]))
 
 (defn y-val
   "Returns the y-value of the line y=mx+b at x."
   [x m b]
-  (+ (* m x) b))
+  (clojure.core/+ (clojure.core/* m x) b))
 
 (defn x-val
   "Returns the x-value of the line y=mx+b at y."
   [y m b]
-  (/ (- y b) m))
+  (clojure.core// (clojure.core/- y b) m))
 
 (defn closest-point
   "Given an [x y] point p and a line segment l (or a corresponding starting point c
